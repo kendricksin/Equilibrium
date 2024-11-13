@@ -3,7 +3,17 @@
 import streamlit as st
 import pandas as pd
 from datetime import datetime
+# import fuzzywuzzy
+# from fuzzywuzzy import process
 
+def get_unique_departments(conn):
+    try:
+        query = "SELECT DISTINCT dept_name FROM projects"
+        df = pd.read_sql(query, conn)
+        return df['dept_name'].tolist()
+    except Exception as e:
+        st.error(f"Database error: {str(e)}")
+        return []
 def get_row_count(conn, filters):
     """Get the count of rows that match the filter criteria."""
     try:
@@ -87,43 +97,55 @@ def calculate_metrics(df):
     }
     return metrics
 
-def load_page(get_db_connection):
-    """Load the Filters Analysis Page."""
+def load_page(get_db_connection, filters):
     st.title("Project Analysis Dashboard")
-
+    
     # Initialize session state
     if 'show_confirm_buttons' not in st.session_state:
         st.session_state.show_confirm_buttons = False
     if 'execute_query' not in st.session_state:
         st.session_state.execute_query = False
     if 'current_filters' not in st.session_state:
-        st.session_state.current_filters = None
+        st.session_state.current_filters = filters
+
+    # Fetch unique department names from the database
+    unique_depts = get_unique_departments(get_db_connection())
 
     # Sidebar filters
     st.sidebar.header("Filters")
-    dept_name = st.sidebar.text_input("Department")
-    date_start = st.sidebar.date_input("Start Date", datetime(2019, 1, 1))
-    date_end = st.sidebar.date_input("End Date", datetime(2024, 12, 31))
+    # dept_name = st.sidebar.text_input("Department", value=filters['dept_name'])
+    dept_options = unique_depts.copy()
+    # Fuzzy search for department name
+    # if filters['dept_name']:
+    #     dept_matches = process.extract(filters['dept_name'], unique_depts, scorer=fuzzywuzzy.fuzz.partial_ratio, limit=5)
+    #     dept_options = [match[0] for match in dept_matches]
     
+    dept_name = st.sidebar.selectbox("Department", options=dept_options, index=dept_options.index(filters['dept_name']) if filters['dept_name'] in dept_options else 0)
+    date_start = st.sidebar.date_input("Start Date", value=filters['date_start'] or datetime(2022, 1, 1))
+    date_end = st.sidebar.date_input("End Date", value=filters['date_end'] or datetime(2023, 12, 31))
+        
     # Price range multi-select
     price_ranges = ['0-10', '10-50', '50-100', '100-200', '200-500', '>500']
     selected_price_ranges = st.sidebar.multiselect(
         "Price Range (Million Baht)",
         options=price_ranges,
-        default=[]
+        default=filters['price_ranges']
     )
 
+    # Update the filters state
     filters = {
         'dept_name': dept_name,
         'date_start': date_start,
         'date_end': date_end,
         'price_ranges': selected_price_ranges
     }
+    st.session_state.filters = filters
 
     def handle_reset():
         st.session_state.show_confirm_buttons = False
         st.session_state.execute_query = False
         st.session_state.current_filters = None
+        st.session_state.filtered_data = None  # Reset the filtered data
         st.experimental_rerun()
 
     # Apply filters and fetch data
@@ -132,55 +154,35 @@ def load_page(get_db_connection):
         st.session_state.show_confirm_buttons = True
         st.session_state.execute_query = False
 
-    # Main content area
-    if st.session_state.show_confirm_buttons or st.session_state.execute_query:
-        with st.spinner("Checking row count..."):
+        with st.spinner("Fetching data..."):
             conn = get_db_connection()
-            row_count = get_row_count(conn, st.session_state.current_filters)
-            
-            if row_count is None:
-                st.error("Error checking row count")
-                conn.close()
-                return
-            
-            st.write(f"Number of matching rows: {row_count}")
-            
-            if row_count == 0:
-                st.warning("No data found for the selected filters.")
-                conn.close()
-                return
-            
-            if row_count > 2000 and not st.session_state.execute_query:
-                col1, col2 = st.columns(2)
-                with col1:
-                    if st.button("Execute Large Query"):
-                        st.session_state.execute_query = True
-                        st.experimental_rerun()
-                with col2:
-                    if st.button("Reset Filters"):
-                        handle_reset()
-                        
-                conn.close()
-                return
-            
-            # Execute query if row count <= 2000 or user confirmed
-            if row_count <= 2000 or st.session_state.execute_query:
-                with st.spinner("Fetching data..."):
-                    df = get_filtered_data(conn, st.session_state.current_filters)
-                    conn.close()
+            df = get_filtered_data(conn, st.session_state.current_filters)
+            conn.close()
 
-                    if df is not None and not df.empty:
-                        # Calculate and display metrics
-                        metrics = calculate_metrics(df)
-                        st.write("### Key Metrics")
-                        col1, col2, col3 = st.columns(3)
-                        
-                        col1.metric("Total Projects", f"{metrics['total_projects']}")
-                        col1.metric("Unique Winners", f"{metrics['unique_winners']}")
-                        col2.metric("Total Value (MB)", f"{metrics['total_value']:.2f}")
-                        col2.metric("Average Project Value (MB)", f"{metrics['avg_project_value']:.2f}")
-                        col3.metric("Average Price Cut (%)", f"{metrics['avg_price_cut']:.2f}%")
-                        
-                        # Display filtered data
-                        st.write("### Filtered Data")
-                        st.dataframe(df)
+            if df is not None and not df.empty:
+                # Store the filtered data in the session state
+                st.session_state.filtered_data = df
+
+                # Calculate and display metrics
+                metrics = calculate_metrics(df)
+                st.write("### Key Metrics")
+                col1, col2, col3 = st.columns(3)
+                
+                col1.metric("Total Projects", f"{metrics['total_projects']}")
+                col1.metric("Unique Winners", f"{metrics['unique_winners']}")
+                col2.metric("Total Value (MB)", f"{metrics['total_value']:.2f}")
+                col2.metric("Average Project Value (MB)", f"{metrics['avg_project_value']:.2f}")
+                col3.metric("Average Price Cut (%)", f"{metrics['avg_price_cut']:.2f}%")
+                
+                # Display filtered data
+                st.write("### Filtered Data")
+                st.dataframe(df)
+            else:
+                st.warning("No data found for the selected filters.")
+
+    # Reset filters button
+    if st.session_state.show_confirm_buttons or st.session_state.execute_query:
+        col1, col2 = st.columns([1, 4])
+        with col1:
+            if st.button("Reset Filters"):
+                handle_reset()

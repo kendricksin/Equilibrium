@@ -64,55 +64,26 @@ def main():
     # Set up Streamlit page configuration
     st.set_page_config(page_title="Projects Database Viewer", page_icon="📊", layout="wide")
 
-    # Page selection
-    page = st.sidebar.selectbox("Choose a Page", ["Home", "Filters Analysis"])
+    # Initialize filters state
+    if 'filters' not in st.session_state:
+        st.session_state.filters = {
+            'dept_name': '',
+            'date_start': None,
+            'date_end': None,
+            'price_ranges': []
+        }
 
-    if page == "Home":
-        # Title
-        st.title("Projects Database Random Sample")
-        st.write("Displaying 10 random rows with 5 random columns")
-        
-        # Container for refresh button and last refresh time
-        col1, col2 = st.columns([1, 4])
-        
-        with col1:
-            refresh = st.button("🔄 Refresh Data")
-        
-        # If refresh button is clicked or it's the first load
-        if refresh or 'data' not in st.session_state:
-            with st.spinner('Fetching random data...'):
-                df = get_random_data()
-                if df is not None:
-                    st.session_state.data = df
-        
-        # Display data if available
-        if 'data' in st.session_state:
-            # Show the random selection info
-            st.write("#### Selected Columns:")
-            st.write(", ".join(st.session_state.data.columns.tolist()))
-            
-            # Display the data with formatting
-            st.dataframe(
-                st.session_state.data,
-                use_container_width=True,
-                hide_index=True
-            )
-            
-            # Display basic statistics
-            st.write("#### Basic Statistics")
-            numeric_cols = st.session_state.data.select_dtypes(include=['float64', 'int64']).columns
-            if len(numeric_cols) > 0:
-                st.dataframe(
-                    st.session_state.data[numeric_cols].describe(),
-                    use_container_width=True
-                )
-        else:
-            st.warning("No data available. Please check your database connection.")
-    
-    elif page == "Filters Analysis":
+    # Page selection
+    page = st.sidebar.selectbox("Choose a Page", ["Filters Analysis", "Dashboards"])
+
+    if page == "Filters Analysis":
         # Import and load the filters page
         from pages import filters
-        filters.load_page(get_db_connection)
+        filters.load_page(get_db_connection, st.session_state.filters)
+    elif page == "Dashboards":
+        # Load the dashboards page
+        from pages import dashboard1
+        dashboard1.load_dashboards(get_db_connection, st.session_state.filters)
 
 if __name__ == "__main__":
     main()
