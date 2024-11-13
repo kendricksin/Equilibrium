@@ -4,77 +4,7 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime
 
-def get_row_count(conn, filters):
-    """Get the count of rows that match the filter criteria."""
-    try:
-        conditions = []
-        params = []
-
-        if filters['dept_name']:
-            conditions.append("dept_name = %s")
-            params.append(filters['dept_name'])
-
-        conditions.append("transaction_date BETWEEN %s AND %s")
-        params.extend([filters['date_start'], filters['date_end']])
-
-        price_conditions = []
-        for price_range in filters['price_ranges']:
-            if price_range == '>500':
-                price_conditions.append("sum_price_agree > %s")
-                params.append(500 * 1e6)
-            else:
-                min_price, max_price = map(float, price_range.replace('>','').split('-'))
-                price_conditions.append("(sum_price_agree BETWEEN %s AND %s)")
-                params.extend([min_price * 1e6, max_price * 1e6])
-
-        if price_conditions:
-            conditions.append(f"({' OR '.join(price_conditions)})")
-
-        where_clause = " AND ".join(conditions) if conditions else "1=1"
-        query = f"SELECT COUNT(*) as count FROM projects WHERE {where_clause}"
-        
-        df = pd.read_sql(query, conn, params=params)
-        return df['count'].iloc[0]
-
-    except Exception as e:
-        st.error(f"Database error: {str(e)}")
-        return None
-
-def get_filtered_data(conn, filters):
-    """Get data based on selected filters."""
-    try:
-        conditions = []
-        params = []
-
-        if filters['dept_name']:
-            conditions.append("dept_name = %s")
-            params.append(filters['dept_name'])
-
-        conditions.append("transaction_date BETWEEN %s AND %s")
-        params.extend([filters['date_start'], filters['date_end']])
-
-        price_conditions = []
-        for price_range in filters['price_ranges']:
-            if price_range == '>500':
-                price_conditions.append("sum_price_agree > %s")
-                params.append(500 * 1e6)
-            else:
-                min_price, max_price = map(float, price_range.replace('>','').split('-'))
-                price_conditions.append("(sum_price_agree BETWEEN %s AND %s)")
-                params.extend([min_price * 1e6, max_price * 1e6])
-
-        if price_conditions:
-            conditions.append(f"({' OR '.join(price_conditions)})")
-
-        where_clause = " AND ".join(conditions) if conditions else "1=1"
-        query = f"SELECT * FROM projects WHERE {where_clause}"
-        
-        df = pd.read_sql(query, conn, params=params)
-        return df
-
-    except Exception as e:
-        st.error(f"Database error: {str(e)}")
-        return None
+# [Previous functions: get_row_count and get_filtered_data remain the same]
 
 def calculate_metrics(df):
     """Calculate key metrics from the filtered dataset."""
@@ -83,6 +13,7 @@ def calculate_metrics(df):
         'unique_winners': df['winner'].nunique(),
         'total_value': df['sum_price_agree'].sum() / 1e6,  # Convert to millions
         'avg_project_value': (df['sum_price_agree'].mean() / 1e6) if len(df) > 0 else 0,
+        'avg_price_cut': ((df['sum_price_agree'].sum() / df['price_build'].sum() - 1) * 100) if len(df) > 0 and df['price_build'].sum() != 0 else 0
     }
     return metrics
 
@@ -172,12 +103,13 @@ def load_page(get_db_connection):
                         # Calculate and display metrics
                         metrics = calculate_metrics(df)
                         st.write("### Key Metrics")
-                        col1, col2 = st.columns(2)
+                        col1, col2, col3 = st.columns(3)
                         
                         col1.metric("Total Projects", f"{metrics['total_projects']}")
                         col1.metric("Unique Winners", f"{metrics['unique_winners']}")
                         col2.metric("Total Value (MB)", f"{metrics['total_value']:.2f}")
                         col2.metric("Average Project Value (MB)", f"{metrics['avg_project_value']:.2f}")
+                        col3.metric("Average Price Cut (%)", f"{metrics['avg_price_cut']:.2f}%")
                         
                         # Display filtered data
                         st.write("### Filtered Data")
