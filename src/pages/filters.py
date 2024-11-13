@@ -149,7 +149,7 @@ def load_page(get_db_connection):
                 conn.close()
                 return
             
-            if row_count > 1000 and not st.session_state.execute_query:
+            if row_count > 2000 and not st.session_state.execute_query:
                 col1, col2 = st.columns(2)
                 with col1:
                     if st.button("Execute Large Query"):
@@ -162,8 +162,8 @@ def load_page(get_db_connection):
                 conn.close()
                 return
             
-            # Execute query if row count <= 1000 or user confirmed
-            if row_count <= 1000 or st.session_state.execute_query:
+            # Execute query if row count <= 2000 or user confirmed
+            if row_count <= 2000 or st.session_state.execute_query:
                 with st.spinner("Fetching data..."):
                     df = get_filtered_data(conn, st.session_state.current_filters)
                     conn.close()
