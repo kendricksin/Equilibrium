@@ -4,7 +4,77 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime
 
-# [Previous functions: get_row_count and get_filtered_data remain the same]
+def get_row_count(conn, filters):
+    """Get the count of rows that match the filter criteria."""
+    try:
+        conditions = []
+        params = []
+
+        if filters['dept_name']:
+            conditions.append("dept_name = %s")
+            params.append(filters['dept_name'])
+
+        conditions.append("transaction_date BETWEEN %s AND %s")
+        params.extend([filters['date_start'], filters['date_end']])
+
+        price_conditions = []
+        for price_range in filters['price_ranges']:
+            if price_range == '>500':
+                price_conditions.append("sum_price_agree > %s")
+                params.append(500 * 1e6)
+            else:
+                min_price, max_price = map(float, price_range.replace('>','').split('-'))
+                price_conditions.append("(sum_price_agree BETWEEN %s AND %s)")
+                params.extend([min_price * 1e6, max_price * 1e6])
+
+        if price_conditions:
+            conditions.append(f"({' OR '.join(price_conditions)})")
+
+        where_clause = " AND ".join(conditions) if conditions else "1=1"
+        query = f"SELECT COUNT(*) as count FROM projects WHERE {where_clause}"
+        
+        df = pd.read_sql(query, conn, params=params)
+        return df['count'].iloc[0]
+
+    except Exception as e:
+        st.error(f"Database error: {str(e)}")
+        return None
+
+def get_filtered_data(conn, filters):
+    """Get data based on selected filters."""
+    try:
+        conditions = []
+        params = []
+
+        if filters['dept_name']:
+            conditions.append("dept_name = %s")
+            params.append(filters['dept_name'])
+
+        conditions.append("transaction_date BETWEEN %s AND %s")
+        params.extend([filters['date_start'], filters['date_end']])
+
+        price_conditions = []
+        for price_range in filters['price_ranges']:
+            if price_range == '>500':
+                price_conditions.append("sum_price_agree > %s")
+                params.append(500 * 1e6)
+            else:
+                min_price, max_price = map(float, price_range.replace('>','').split('-'))
+                price_conditions.append("(sum_price_agree BETWEEN %s AND %s)")
+                params.extend([min_price * 1e6, max_price * 1e6])
+
+        if price_conditions:
+            conditions.append(f"({' OR '.join(price_conditions)})")
+
+        where_clause = " AND ".join(conditions) if conditions else "1=1"
+        query = f"SELECT * FROM projects WHERE {where_clause}"
+        
+        df = pd.read_sql(query, conn, params=params)
+        return df
+
+    except Exception as e:
+        st.error(f"Database error: {str(e)}")
+        return None
 
 def calculate_metrics(df):
     """Calculate key metrics from the filtered dataset."""
