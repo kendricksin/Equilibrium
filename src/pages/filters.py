@@ -90,6 +90,14 @@ def load_page(get_db_connection):
     """Load the Filters Analysis Page."""
     st.title("Project Analysis Dashboard")
 
+    # Initialize session state
+    if 'show_confirm_buttons' not in st.session_state:
+        st.session_state.show_confirm_buttons = False
+    if 'execute_query' not in st.session_state:
+        st.session_state.execute_query = False
+    if 'current_filters' not in st.session_state:
+        st.session_state.current_filters = None
+
     # Sidebar filters
     st.sidebar.header("Filters")
     dept_name = st.sidebar.text_input("Department")
@@ -111,14 +119,27 @@ def load_page(get_db_connection):
         'price_ranges': selected_price_ranges
     }
 
+    def handle_reset():
+        st.session_state.show_confirm_buttons = False
+        st.session_state.execute_query = False
+        st.session_state.current_filters = None
+        st.experimental_rerun()
+
     # Apply filters and fetch data
     if st.sidebar.button("Apply Filters"):
+        st.session_state.current_filters = filters
+        st.session_state.show_confirm_buttons = True
+        st.session_state.execute_query = False
+
+    # Main content area
+    if st.session_state.show_confirm_buttons or st.session_state.execute_query:
         with st.spinner("Checking row count..."):
             conn = get_db_connection()
-            row_count = get_row_count(conn, filters)
+            row_count = get_row_count(conn, st.session_state.current_filters)
             
             if row_count is None:
                 st.error("Error checking row count")
+                conn.close()
                 return
             
             st.write(f"Number of matching rows: {row_count}")
@@ -128,33 +149,36 @@ def load_page(get_db_connection):
                 conn.close()
                 return
             
-            if row_count > 1000:
-                proceed = st.button("Proceed with large query?", 
-                                  help=f"This query will return {row_count} rows. Click to proceed or adjust filters to reduce the result set.")
-                reset = st.button("Reset Filters")
-                
-                if reset:
-                    st.experimental_rerun()
-                if not proceed:
-                    conn.close()
-                    return
-            
-            # Proceed with main query if row count <= 1000 or user confirmed
-            with st.spinner("Fetching data..."):
-                df = get_filtered_data(conn, filters)
+            if row_count > 1000 and not st.session_state.execute_query:
+                col1, col2 = st.columns(2)
+                with col1:
+                    if st.button("Execute Large Query"):
+                        st.session_state.execute_query = True
+                        st.experimental_rerun()
+                with col2:
+                    if st.button("Reset Filters"):
+                        handle_reset()
+                        
                 conn.close()
+                return
+            
+            # Execute query if row count <= 1000 or user confirmed
+            if row_count <= 1000 or st.session_state.execute_query:
+                with st.spinner("Fetching data..."):
+                    df = get_filtered_data(conn, st.session_state.current_filters)
+                    conn.close()
 
-                if df is not None and not df.empty:
-                    # Calculate and display metrics
-                    metrics = calculate_metrics(df)
-                    st.write("### Key Metrics")
-                    col1, col2 = st.columns(2)
-                    
-                    col1.metric("Total Projects", f"{metrics['total_projects']}")
-                    col1.metric("Unique Winners", f"{metrics['unique_winners']}")
-                    col2.metric("Total Value (MB)", f"{metrics['total_value']:.2f}")
-                    col2.metric("Average Project Value (MB)", f"{metrics['avg_project_value']:.2f}")
-                    
-                    # Display filtered data
-                    st.write("### Filtered Data")
-                    st.dataframe(df)
+                    if df is not None and not df.empty:
+                        # Calculate and display metrics
+                        metrics = calculate_metrics(df)
+                        st.write("### Key Metrics")
+                        col1, col2 = st.columns(2)
+                        
+                        col1.metric("Total Projects", f"{metrics['total_projects']}")
+                        col1.metric("Unique Winners", f"{metrics['unique_winners']}")
+                        col2.metric("Total Value (MB)", f"{metrics['total_value']:.2f}")
+                        col2.metric("Average Project Value (MB)", f"{metrics['avg_project_value']:.2f}")
+                        
+                        # Display filtered data
+                        st.write("### Filtered Data")
+                        st.dataframe(df)
