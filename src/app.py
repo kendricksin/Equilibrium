@@ -2,6 +2,8 @@ import streamlit as st
 from pymongo import MongoClient
 import logging
 from datetime import datetime
+import pandas as pd
+from special_functions.metrics import display_metrics_dashboard
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -33,8 +35,7 @@ def connect_to_mongodb(mongo_uri):
 def get_filtered_data(collection, filters):
     """Fetch filtered data with logging"""
     try:
-        logger.info(f"Attempting to fetch data with filters: {filters}")
-        
+        logger.info(f"Attempting to fetch data with filters: {filters}")      
         query = {}
         
         # Add department filter if selected
@@ -42,7 +43,7 @@ def get_filtered_data(collection, filters):
             query['dept_name'] = filters['dept_name']
             logger.info(f"Added department filter: {filters['dept_name']}")
 
-        # Add date range filter if dates are selected
+        # Add date range filter - Fixed datetime usage
         if filters.get('date_start') and filters.get('date_end'):
             start_date = datetime.combine(filters['date_start'], datetime.min.time())
             end_date = datetime.combine(filters['date_end'], datetime.max.time())
@@ -50,7 +51,6 @@ def get_filtered_data(collection, filters):
                 "$gte": start_date,
                 "$lte": end_date
             }
-            logger.info(f"Added date range filter: {start_date} to {end_date}")
 
         # Add price range filters
         if filters.get('price_ranges'):
@@ -77,11 +77,22 @@ def get_filtered_data(collection, filters):
             st.warning("No data found for the selected filters.")
             return None
             
-        # Sample first document for debugging
-        if data:
-            logger.info(f"Sample document fields: {list(data[0].keys())}")
-            
-        return data
+        # Convert to DataFrame first
+        df = pd.DataFrame(data)
+        
+        # Then handle datetime conversions
+        date_columns = ['announce_date', 'transaction_date', 'contract_date', 'contract_finish_date']
+        for col in date_columns:
+            if col in df.columns:
+                df[col] = pd.to_datetime(df[col])
+        
+        # Ensure numeric columns are properly typed
+        numeric_columns = ['sum_price_agree', 'price_build']
+        for col in numeric_columns:
+            if col in df.columns:
+                df[col] = pd.to_numeric(df[col], errors='coerce')
+                
+        return df
         
     except Exception as e:
         logger.error(f"Error fetching data: {str(e)}")
@@ -99,11 +110,11 @@ def load_page():
         st.error("Failed to connect to database. Check the logs for details.")
         return
         
-    # Initialize filters
+    # Initialize filters with datetime objects directly
     filters = {
         'dept_name': '',
-        'date_start': datetime(2022, 1, 1),
-        'date_end': datetime(2023, 12, 31),
+        'date_start': datetime(2022, 1, 1).date(),  # Convert to date object
+        'date_end': datetime(2023, 12, 31).date(),  # Convert to date object
         'price_ranges': []
     }
     
@@ -141,17 +152,17 @@ def load_page():
 
     # Apply filters button
     if st.sidebar.button("Apply Filters"):
-        logger.info("Apply Filters button clicked")
-        with st.spinner("Fetching data..."):
-            data = get_filtered_data(collection, filters)
+        with st.spinner("Fetching and analyzing data..."):
+            df = get_filtered_data(collection, filters)
             
-            if data:
-                # Display data (add your visualization code here)
-                st.write("### Filtered Data")
-                st.write(f"Found {len(data)} records")
-                st.dataframe(data)
+            if df is not None and not df.empty:
+                # Display metrics dashboard
+                display_metrics_dashboard(df)
+                
+                # Display filtered data
+                st.subheader("Filtered Data")
+                st.dataframe(df)
             else:
-                logger.warning("No data to display")
                 st.warning("No data available for the selected filters")
 
 if __name__ == "__main__":
