@@ -2,6 +2,7 @@ import pandas as pd
 import plotly.express as px
 from typing import Dict, Any
 import streamlit as st
+
 def calculate_project_metrics(df: pd.DataFrame) -> Dict[str, Any]:
     """
     Calculate project metrics from the filtered DataFrame.
@@ -24,7 +25,7 @@ def calculate_project_metrics(df: pd.DataFrame) -> Dict[str, Any]:
         # Calculate price cut percentage
         total_price_build = df['price_build'].sum() if 'price_build' in df.columns else 0
         if total_price_build > 0:
-            price_cut = (1 - (total_value / total_price_build)) * 100
+            price_cut = ((total_value / total_price_build) - 1) * 100
         else:
             price_cut = 0
             
@@ -32,6 +33,22 @@ def calculate_project_metrics(df: pd.DataFrame) -> Dict[str, Any]:
         purchase_method_dist = None
         if 'purchase_method_name' in df.columns:
             purchase_method_dist = df['purchase_method_name'].value_counts()
+
+        # Calculate company-level metrics
+        company_metrics = None
+        if all(col in df.columns for col in ['winner', 'sum_price_agree', 'price_build']):
+            company_metrics = df.groupby('winner').agg({
+                'winner': 'count',  # Count of projects
+                'sum_price_agree': 'mean',  # Average project value
+                'price_build': lambda x: ((df.loc[x.index, 'sum_price_agree'].sum() / x.sum()) - 1) * 100  # Average price cut
+            }).rename(columns={
+                'winner': 'count',
+                'sum_price_agree': 'avg_project_value',
+                'price_build': 'avg_price_cut'
+            })
+            
+            # Sort by count (number of projects) in descending order
+            company_metrics = company_metrics.sort_values('count', ascending=False)
         
         metrics = {
             'total_projects': total_projects,
@@ -39,7 +56,8 @@ def calculate_project_metrics(df: pd.DataFrame) -> Dict[str, Any]:
             'total_value': total_value,
             'avg_value': avg_value,
             'price_cut': price_cut,
-            'purchase_method_dist': purchase_method_dist
+            'purchase_method_dist': purchase_method_dist,
+            'company_metrics': company_metrics
         }
         
         return metrics
@@ -79,12 +97,12 @@ def display_metrics_dashboard(df: pd.DataFrame):
             
         with col2:
             st.metric(
-                label="Total Value (THB)",
-                value=f"{metrics['total_value']:,.2f}"
+                label="Total Value (M THB)",
+                value=f"{metrics['total_value']/1e6:,.2f} MB"
             )
             st.metric(
-                label="Average Value (THB)",
-                value=f"{metrics['avg_value']:,.2f}"
+                label="Average Value (M THB)",
+                value=f"{metrics['avg_value']/1e6:,.2f} MB"
             )
             
         with col3:
@@ -127,25 +145,29 @@ def display_metrics_dashboard(df: pd.DataFrame):
             # Display chart
             st.plotly_chart(fig, use_container_width=True)
             
-        # Optional: Display detailed metrics table
-        with st.expander("View Detailed Metrics"):
-            detailed_metrics = pd.DataFrame({
-                'Metric': [
-                    'Total Projects',
-                    'Unique Winners',
-                    'Total Value',
-                    'Average Value',
-                    'Price Cut Percentage'
-                ],
-                'Value': [
-                    f"{metrics['total_projects']:,}",
-                    f"{metrics['unique_winners']:,}",
-                    f"{metrics['total_value']:,.2f}",
-                    f"{metrics['avg_value']:,.2f}",
-                    f"{metrics['price_cut']:.2f}%"
+        # Display company metrics table
+        if metrics['company_metrics'] is not None:
+            with st.expander("Show Company List"):
+                # Format the company metrics for display
+                display_df = metrics['company_metrics'].copy()
+                
+                # Format the columns
+                display_df['avg_project_value'] = display_df['avg_project_value'].apply(
+                    lambda x: f"{x/1e6:.2f} MB"
+                )
+                display_df['avg_price_cut'] = display_df['avg_price_cut'].apply(
+                    lambda x: f"{x:.2f}%"
+                )
+                
+                # Rename columns for display
+                display_df.columns = [
+                    'Number of Projects',
+                    'Avg Project Value',
+                    'Avg Price Cut'
                 ]
-            })
-            st.dataframe(detailed_metrics, hide_index=True)
+                
+                # Display the formatted DataFrame
+                st.dataframe(display_df)
             
     except Exception as e:
         st.error(f"Error displaying metrics: {str(e)}")

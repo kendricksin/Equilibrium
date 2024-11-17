@@ -4,6 +4,7 @@ import logging
 from datetime import datetime
 import pandas as pd
 from special_functions.metrics import display_metrics_dashboard
+from pages.price_cut import price_cut_vis
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -109,7 +110,13 @@ def load_page():
     if collection is None:
         st.error("Failed to connect to database. Check the logs for details.")
         return
-        
+    
+    st.sidebar.title("Navigation")
+    page = st.sidebar.radio(
+        "Select a page",
+        ["Project Analysis Dashboard", "Price Cut Analysis"]
+    )
+    
     # Initialize filters with datetime objects directly
     filters = {
         'dept_name': '',
@@ -164,6 +171,9 @@ def load_page():
                 st.dataframe(df)
             else:
                 st.warning("No data available for the selected filters")
+
+    if page == "Price Cut Analysis":
+        price_cut_vis(df)
 
 if __name__ == "__main__":
     load_page()
