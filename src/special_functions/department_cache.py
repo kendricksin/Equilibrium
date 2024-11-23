@@ -13,15 +13,8 @@ os.makedirs(CACHE_DIR, exist_ok=True)
 def get_departments() -> List[str]:
     """
     Retrieve departments, using file-based persistent caching
-    
-    Args:
-        mongo_uri: MongoDB connection string
-    
-    Returns:
-        List of unique department names
     """
-    mongo_uri = "mongodb://root:Password1@dds-gs5de2b9f9cba8b41646-pub.mongodb.singapore.rds.aliyuncs.com:3717,dds-gs5de2b9f9cba8b42352-pub.mongodb.singapore.rds.aliyuncs.com:3717/admin?replicaSet=mgset-311013160"
-
+    mongo_uri = MONGOURI
     cache_file = os.path.join(CACHE_DIR, "departments.json")
     
     # Check if cached file exists
