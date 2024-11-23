@@ -69,9 +69,6 @@ def calculate_project_metrics(df: pd.DataFrame) -> Dict[str, Any]:
 def display_metrics_dashboard(df: pd.DataFrame):
     """
     Display metrics dashboard with calculated values and visualizations.
-    
-    Args:
-        df: pandas DataFrame containing project data
     """
     try:
         # Calculate metrics
@@ -111,63 +108,63 @@ def display_metrics_dashboard(df: pd.DataFrame):
                 value=f"{metrics['price_cut']:.2f}%"
             )
         
-        # Create purchase method distribution pie chart
-        if metrics['purchase_method_dist'] is not None:
-            st.subheader("Purchase Method Distribution")
+        # # Create purchase method distribution pie chart
+        # if metrics['purchase_method_dist'] is not None:
+        #     st.subheader("Purchase Method Distribution")
             
-            # Convert to DataFrame for Plotly
-            dist_df = pd.DataFrame({
-                'Method': metrics['purchase_method_dist'].index,
-                'Count': metrics['purchase_method_dist'].values
-            })
+        #     # Convert to DataFrame for Plotly
+        #     dist_df = pd.DataFrame({
+        #         'Method': metrics['purchase_method_dist'].index,
+        #         'Count': metrics['purchase_method_dist'].values
+        #     })
             
-            # Create pie chart
-            fig = px.pie(
-                dist_df,
-                values='Count',
-                names='Method',
-                title='Distribution of Purchase Methods',
-                hole=0.3  # Makes it a donut chart
-            )
+            # # Create pie chart
+            # fig = px.pie(
+            #     dist_df,
+            #     values='Count',
+            #     names='Method',
+            #     title='Distribution of Purchase Methods',
+            #     hole=0.3  # Makes it a donut chart
+            # )
             
-            # Update layout
-            fig.update_layout(
-                showlegend=True,
-                legend=dict(
-                    orientation="h",
-                    yanchor="bottom",
-                    y=1.02,
-                    xanchor="right",
-                    x=1
-                )
-            )
+            # # Update layout
+            # fig.update_layout(
+            #     showlegend=True,
+            #     legend=dict(
+            #         orientation="h",
+            #         yanchor="bottom",
+            #         y=1.02,
+            #         xanchor="right",
+            #         x=1
+            #     )
+            # )
             
             # Display chart
-            st.plotly_chart(fig, use_container_width=True)
+            # st.plotly_chart(fig, use_container_width=True)
             
         # Display company metrics table
         if metrics['company_metrics'] is not None:
-            with st.expander("Show Company List"):
-                # Format the company metrics for display
-                display_df = metrics['company_metrics'].copy()
                 
-                # Format the columns
-                display_df['avg_project_value'] = display_df['avg_project_value'].apply(
-                    lambda x: f"{x/1e6:.2f} MB"
-                )
-                display_df['avg_price_cut'] = display_df['avg_price_cut'].apply(
-                    lambda x: f"{x:.2f}%"
-                )
+            # Format the company metrics for display
+            display_df = metrics['company_metrics'].copy()
+            
+            # Format the columns
+            display_df['avg_project_value'] = display_df['avg_project_value'].apply(
+                lambda x: f"{x/1e6:.2f} MB"
+            )
+            display_df['avg_price_cut'] = display_df['avg_price_cut'].apply(
+                lambda x: f"{x:.2f}%"
+            )
                 
-                # Rename columns for display
-                display_df.columns = [
-                    'Number of Projects',
-                    'Avg Project Value',
-                    'Avg Price Cut'
-                ]
+            # Rename columns for display
+            display_df.columns = [
+                'Number of Projects',
+                'Avg Project Value',
+                'Avg Price Cut'
+            ]
                 
-                # Display the formatted DataFrame
-                st.dataframe(display_df)
+            # Display the formatted DataFrame
+            st.dataframe(display_df)
             
     except Exception as e:
         st.error(f"Error displaying metrics: {str(e)}")

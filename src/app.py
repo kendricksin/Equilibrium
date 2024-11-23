@@ -2,9 +2,10 @@ import streamlit as st
 from pymongo import MongoClient
 import logging
 from datetime import datetime
-import pandas as pd
 from special_functions.metrics import display_metrics_dashboard
-from pages.price_cut import price_cut_vis
+from special_functions.filter_cache import get_filtered_data
+from special_functions.department_cache import get_departments, get_sub_department
+# from pages.price_cut import price_cut_vis
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -32,148 +33,91 @@ def connect_to_mongodb(mongo_uri):
         logger.error(f"Failed to connect to MongoDB: {str(e)}")
         st.error(f"Error connecting to MongoDB: {str(e)}")
         return None
-
-def get_filtered_data(collection, filters):
-    """Fetch filtered data with logging"""
-    try:
-        logger.info(f"Attempting to fetch data with filters: {filters}")      
-        query = {}
-        
-        # Add department filter if selected
-        if filters.get('dept_name'):
-            query['dept_name'] = filters['dept_name']
-            logger.info(f"Added department filter: {filters['dept_name']}")
-
-        # Add date range filter - Fixed datetime usage
-        if filters.get('date_start') and filters.get('date_end'):
-            start_date = datetime.combine(filters['date_start'], datetime.min.time())
-            end_date = datetime.combine(filters['date_end'], datetime.max.time())
-            query['transaction_date'] = {
-                "$gte": start_date,
-                "$lte": end_date
-            }
-
-        # Add price range filters
-        if filters.get('price_ranges'):
-            price_conditions = []
-            for price_range in filters['price_ranges']:
-                if price_range == '>500':
-                    price_conditions.append({"price": {"$gt": 500}})
-                elif '-' in price_range:
-                    low, high = map(float, price_range.split('-'))
-                    price_conditions.append({"price": {"$gte": low, "$lte": high}})
-            if price_conditions:
-                query["$or"] = price_conditions
-            logger.info(f"Added price range filters: {filters['price_ranges']}")
-
-        logger.info(f"Final query: {query}")
-        
-        # Execute query
-        cursor = collection.find(query)
-        data = list(cursor)
-        logger.info(f"Query returned {len(data)} documents")
-        
-        if not data:
-            logger.warning("No data found for the given filters")
-            st.warning("No data found for the selected filters.")
-            return None
-            
-        # Convert to DataFrame first
-        df = pd.DataFrame(data)
-        
-        # Then handle datetime conversions
-        date_columns = ['announce_date', 'transaction_date', 'contract_date', 'contract_finish_date']
-        for col in date_columns:
-            if col in df.columns:
-                df[col] = pd.to_datetime(df[col])
-        
-        # Ensure numeric columns are properly typed
-        numeric_columns = ['sum_price_agree', 'price_build']
-        for col in numeric_columns:
-            if col in df.columns:
-                df[col] = pd.to_numeric(df[col], errors='coerce')
-                
-        return df
-        
-    except Exception as e:
-        logger.error(f"Error fetching data: {str(e)}")
-        st.error(f"Error fetching data: {str(e)}")
-        return None
-
 def load_page():
     st.title("Project Analysis Dashboard")
     
-    # Connect to MongoDB
-    mongo_uri = "mongodb://localhost:27017/"  # Replace with your MongoDB URI
-    collection = connect_to_mongodb(mongo_uri)
-    
-    if collection is None:
-        st.error("Failed to connect to database. Check the logs for details.")
-        return
-    
-    st.sidebar.title("Navigation")
-    page = st.sidebar.radio(
-        "Select a page",
-        ["Project Analysis Dashboard", "Price Cut Analysis"]
-    )
-    
-    # Initialize filters with datetime objects directly
+    # Initialize filters
     filters = {
         'dept_name': '',
-        'date_start': datetime(2022, 1, 1).date(),  # Convert to date object
-        'date_end': datetime(2023, 12, 31).date(),  # Convert to date object
-        'price_ranges': []
+        'dept_sub_name': '',
+        'date_start': datetime(2022, 1, 1).date(),
+        'date_end': datetime(2023, 12, 31).date(),
+        'price_start': None,
+        'price_end': None
     }
     
     # Sidebar filters
     st.sidebar.header("Filters")
     
-    try:
-        # Get unique departments
-        logger.info("Fetching unique departments")
-        unique_depts = sorted(collection.distinct("dept_name"))
-        logger.info(f"Found {len(unique_depts)} unique departments")
+    unique_depts = get_departments()
+    logger.info(f"Found {len(unique_depts)} unique departments")
+
+    # Department filter
+    dept_options = [""] + unique_depts
+    filters['dept_name'] = st.sidebar.selectbox(
+        "Department",
+        options=dept_options
+    )
+
+    # Sub-department filter
+    if filters['dept_name']:
+        unique_sub_depts = get_sub_department(filters['dept_name'])
+        logger.info(f"Found {len(unique_sub_depts)} sub-departments")
         
-        # Department filter
-        dept_options = [""] + unique_depts
-        filters['dept_name'] = st.sidebar.selectbox(
-            "Department",
-            options=dept_options
+        sub_dept_options = [""] + unique_sub_depts
+        filters['dept_sub_name'] = st.sidebar.selectbox(
+            "Sub-Department",
+            options=sub_dept_options
         )
-        
+            
         # Date filters
         filters['date_start'] = st.sidebar.date_input("Start Date", value=filters['date_start'])
         filters['date_end'] = st.sidebar.date_input("End Date", value=filters['date_end'])
         
-        # Price range filter
-        price_ranges = ['0-10', '10-50', '50-100', '100-200', '200-500', '>500']
-        filters['price_ranges'] = st.sidebar.multiselect(
-            "Price Range (Million Baht)",
-            options=price_ranges
-        )
+        # Price range filter with numeric inputs and default values
+        st.sidebar.subheader("Price Range (Million Baht)")
+        col1, col2 = st.sidebar.columns(2)
         
-    except Exception as e:
-        logger.error(f"Error setting up filters: {str(e)}")
-        st.error(f"Error setting up filters: {str(e)}")
-        return
+        with col1:
+            filters['price_start'] = st.number_input(
+                "From", 
+                min_value=0.0,
+                max_value=10000.0,
+                value=0.0,  # Default start value
+                step=10.0,
+                format="%.1f"
+            )
+                
+        with col2:
+            filters['price_end'] = st.number_input(
+                "To",
+                min_value=0.0,
+                max_value=20000.0,
+                value=200.0,  # Default end value
+                step=10.0,
+                format="%.1f"
+            )
+                
+        # Validate price range
+        if filters['price_start'] > filters['price_end']:
+            st.sidebar.error("Start price should be less than end price")
+            return
+
 
     # Apply filters button
     if st.sidebar.button("Apply Filters"):
         with st.spinner("Fetching and analyzing data..."):
-            df = get_filtered_data(collection, filters)
+            df = get_filtered_data(filters)
             
             if df is not None and not df.empty:
                 # Display metrics dashboard
                 display_metrics_dashboard(df)
                 
                 # Display filtered data
-                st.subheader("Filtered Data")
-                st.dataframe(df)
+                # st.subheader("Filtered Data")
+                # st.dataframe(df)
             else:
                 st.warning("No data available for the selected filters")
-
-    if page == "Price Cut Analysis":
-        price_cut_vis(df)
 
 if __name__ == "__main__":
     load_page()
