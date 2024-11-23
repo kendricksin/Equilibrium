@@ -70,38 +70,38 @@ def load_page():
             options=sub_dept_options
         )
             
-        # Date filters
-        filters['date_start'] = st.sidebar.date_input("Start Date", value=filters['date_start'])
-        filters['date_end'] = st.sidebar.date_input("End Date", value=filters['date_end'])
-        
-        # Price range filter with numeric inputs and default values
-        st.sidebar.subheader("Price Range (Million Baht)")
-        col1, col2 = st.sidebar.columns(2)
-        
-        with col1:
-            filters['price_start'] = st.number_input(
-                "From", 
-                min_value=0.0,
-                max_value=10000.0,
-                value=0.0,  # Default start value
-                step=10.0,
-                format="%.1f"
-            )
-                
-        with col2:
-            filters['price_end'] = st.number_input(
-                "To",
-                min_value=0.0,
-                max_value=20000.0,
-                value=200.0,  # Default end value
-                step=10.0,
-                format="%.1f"
-            )
-                
-        # Validate price range
-        if filters['price_start'] > filters['price_end']:
-            st.sidebar.error("Start price should be less than end price")
-            return
+    # Date filters
+    filters['date_start'] = st.sidebar.date_input("Start Date", value=filters['date_start'])
+    filters['date_end'] = st.sidebar.date_input("End Date", value=filters['date_end'])
+    
+    # Price range filter with numeric inputs and default values
+    st.sidebar.subheader("Price Range (Million Baht)")
+    col1, col2 = st.sidebar.columns(2)
+    
+    with col1:
+        filters['price_start'] = st.number_input(
+            "From", 
+            min_value=0.0,
+            max_value=10000.0,
+            value=0.0,  # Default start value
+            step=10.0,
+            format="%.1f"
+        )
+            
+    with col2:
+        filters['price_end'] = st.number_input(
+            "To",
+            min_value=0.0,
+            max_value=20000.0,
+            value=200.0,  # Default end value
+            step=10.0,
+            format="%.1f"
+        )
+            
+    # Validate price range
+    if filters['price_start'] > filters['price_end']:
+        st.sidebar.error("Start price should be less than end price")
+        return
 
 
     # Apply filters button
