@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-from pages.filters import get_filtered_data
+from inactive_pages.filters import get_filtered_data
 import matplotlib.pyplot as plt
 
 def load_dashboards(get_db_connection, filters):

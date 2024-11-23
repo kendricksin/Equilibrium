@@ -6,12 +6,6 @@ import streamlit as st
 def calculate_project_metrics(df: pd.DataFrame) -> Dict[str, Any]:
     """
     Calculate project metrics from the filtered DataFrame.
-    
-    Args:
-        df: pandas DataFrame containing project data
-        
-    Returns:
-        Dictionary containing calculated metrics
     """
     try:
         # Basic metrics

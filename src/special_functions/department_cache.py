@@ -4,6 +4,7 @@ from typing import List, Optional
 from pymongo import MongoClient
 import streamlit as st
 import logging
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -48,13 +49,6 @@ def get_departments() -> List[str]:
 def get_sub_department(dept_name: Optional[str] = None) -> List[str]:
     """
     Retrieve sub-departments with file-based persistent caching
-    
-    Args:
-        mongo_uri: MongoDB connection string
-        dept_name: Optional department to filter sub-departments
-    
-    Returns:
-        List of unique sub-department names
     """
     # Generate a unique filename based on department (or use 'all' if no specific dept)
     cache_filename = f"sub_departments_{dept_name or 'all'}.json"
@@ -93,3 +87,81 @@ def get_sub_department(dept_name: Optional[str] = None) -> List[str]:
     except Exception as e:
         logger.error(f"Error retrieving sub-departments: {e}")
         return []
+
+def render_sidebar_filters():
+    """Render sidebar filters and return filter values"""
+    # Initialize filters
+    filters = {
+        'dept_name': st.session_state.get('dept_name', ''),
+        'dept_sub_name': st.session_state.get('dept_sub_name', ''),
+        'date_start': st.session_state.get('date_start', datetime(2022, 1, 1).date()),
+        'date_end': st.session_state.get('date_end', datetime(2023, 12, 31).date()),
+        'price_start': st.session_state.get('price_start', 0.0),
+        'price_end': st.session_state.get('price_end', 200.0)
+    }
+    
+    # Sidebar filters
+    st.sidebar.header("Filters")
+    
+    unique_depts = get_departments()
+    logger.info(f"Found {len(unique_depts)} unique departments")
+
+    # Department filter - using session state
+    dept_options = [""] + unique_depts
+    filters['dept_name'] = st.sidebar.selectbox(
+        "Department",
+        options=dept_options,
+        key="dept_name"  # This maintains state across pages
+    )
+
+    # Sub-department filter - using session state
+    if filters['dept_name']:
+        unique_sub_depts = get_sub_department(filters['dept_name'])
+        logger.info(f"Found {len(unique_sub_depts)} sub-departments")
+        
+        sub_dept_options = [""] + unique_sub_depts
+        filters['dept_sub_name'] = st.sidebar.selectbox(
+            "Sub-Department",
+            options=sub_dept_options,
+            key="dept_sub_name"  # This maintains state across pages
+        )
+            
+    # Date filters - using session state
+    filters['date_start'] = st.sidebar.date_input(
+        "Start Date",
+        value=filters['date_start'],
+        key="date_start"  # This maintains state across pages
+    )
+    filters['date_end'] = st.sidebar.date_input(
+        "End Date",
+        value=filters['date_end'],
+        key="date_end"  # This maintains state across pages
+    )
+    
+    # Price range filter with numeric inputs and default values
+    st.sidebar.subheader("Price Range (Million Baht)")
+    col1, col2 = st.sidebar.columns(2)
+    
+    with col1:
+        filters['price_start'] = st.number_input(
+            "From", 
+            min_value=0.0,
+            max_value=10000.0,
+            value=0.0,
+            step=10.0,
+            format="%.1f",
+            key="price_start"  # This maintains state across pages
+        )
+            
+    with col2:
+        filters['price_end'] = st.number_input(
+            "To",
+            min_value=0.0,
+            max_value=20000.0,
+            value=200.0,
+            step=10.0,
+            format="%.1f",
+            key="price_end"  # This maintains state across pages
+        )
+    
+    return filters
