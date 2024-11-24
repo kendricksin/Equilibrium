@@ -2,3 +2,11 @@ eqb/
 .env
 scripts/
 src/_pycache_/
+cache/
+dept_cache/
+.vscode/
+layout/_pycache_/
+tables/_pycache_/
+pages/_pycache_/
+services/_pycache_/
+state/_pycache_/
