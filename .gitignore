@@ -10,3 +10,7 @@ tables/_pycache_/
 pages/_pycache_/
 services/_pycache_/
 state/_pycache_/
+diagnostic_runner.py
+env_diagnostic.py
+load_dotenv.py
+mongo_test.py
