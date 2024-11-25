@@ -22,34 +22,28 @@ class SessionState:
             st.session_state.filters = {
                 'dept_name': '',
                 'dept_sub_name': '',
+                'purchase_method_name': '',  # Added
+                'project_type_name': '',     # Added
                 'date_start': datetime(2022, 1, 1).date(),
                 'date_end': datetime(2023, 12, 31).date(),
                 'price_start': 0.0,
                 'price_end': 200.0
             }
             
-            # Data state
+            # Rest of initialization remains the same
             st.session_state.filtered_df = None
             st.session_state.filters_applied = False
-            
-            # Selection state
             st.session_state.selected_companies = []
             st.session_state.selected_companies_set = set()
-            
-            # Analysis state
             st.session_state.analysis_results = {}
-            
-            # UI state
             st.session_state.show_filters = True
             st.session_state.show_insights = True
             st.session_state.edit_mode = False
-            
-            # Cache state
             st.session_state.cache_timestamp = {}
             
             st.session_state.initialized = True
             logger.info("Session state initialized")
-    
+        
     @staticmethod
     def get_current_page() -> str:
         """Get current page name"""
@@ -80,6 +74,8 @@ class SessionState:
         st.session_state.filters = {
             'dept_name': '',
             'dept_sub_name': '',
+            'purchase_method_name': '',  # Added
+            'project_type_name': '',     # Added
             'date_start': datetime(2022, 1, 1).date(),
             'date_end': datetime(2023, 12, 31).date(),
             'price_start': 0.0,

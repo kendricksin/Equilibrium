@@ -88,6 +88,44 @@ class AnalyticsService:
             return pd.DataFrame()
     
     @staticmethod
+    def analyze_purchase_methods(df: pd.DataFrame) -> Dict[str, Any]:
+        """Analyze purchase method distribution and metrics"""
+        try:
+            method_analysis = {
+                'by_count': df['purchase_method_name'].value_counts().to_dict(),
+                'by_value': df.groupby('purchase_method_name')['sum_price_agree'].sum().to_dict(),
+                'by_avg_value': df.groupby('purchase_method_name')['sum_price_agree'].mean().to_dict(),
+                'by_unique_companies': df.groupby('purchase_method_name')['winner'].nunique().to_dict(),
+                'efficiency': {
+                    method: ((group['sum_price_agree'].sum() / group['price_build'].sum() - 1) * 100)
+                    for method, group in df.groupby('purchase_method_name')
+                }
+            }
+            return method_analysis
+        except Exception as e:
+            logger.error(f"Error analyzing purchase methods: {e}")
+            return {}
+
+    @staticmethod
+    def analyze_project_types(df: pd.DataFrame) -> Dict[str, Any]:
+        """Analyze project type distribution and metrics"""
+        try:
+            type_analysis = {
+                'by_count': df['project_type_name'].value_counts().to_dict(),
+                'by_value': df.groupby('project_type_name')['sum_price_agree'].sum().to_dict(),
+                'by_avg_value': df.groupby('project_type_name')['sum_price_agree'].mean().to_dict(),
+                'by_unique_companies': df.groupby('project_type_name')['winner'].nunique().to_dict(),
+                'by_dept_distribution': {
+                    ptype: group['dept_name'].value_counts().to_dict()
+                    for ptype, group in df.groupby('project_type_name')
+                }
+            }
+            return type_analysis
+        except Exception as e:
+            logger.error(f"Error analyzing project types: {e}")
+            return {}
+    
+    @staticmethod
     def analyze_price_trends(df: pd.DataFrame) -> Dict[str, Any]:
         """Analyze price trends over time"""
         try:
@@ -155,8 +193,7 @@ class AnalyticsService:
             
         except Exception as e:
             logger.error(f"Error analyzing competitive landscape: {e}")
-            return {}
-    
+            return {}    
     @staticmethod
     def analyze_geographical_distribution(df: pd.DataFrame) -> Dict[str, Any]:
         """Analyze geographical distribution of projects"""

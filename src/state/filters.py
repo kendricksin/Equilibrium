@@ -63,15 +63,7 @@ class FilterManager:
     
     @staticmethod
     def build_mongo_query(filters: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Build MongoDB query from filters
-        
-        Args:
-            filters (Dict[str, Any]): Filter values
-            
-        Returns:
-            Dict[str, Any]: MongoDB query
-        """
+        """Build MongoDB query from filters"""
         query = {}
         
         try:
@@ -83,6 +75,14 @@ class FilterManager:
             if filters.get('dept_sub_name'):
                 query['dept_sub_name'] = filters['dept_sub_name']
             
+            # Purchase method filter
+            if filters.get('purchase_method_name'):
+                query['purchase_method_name'] = filters['purchase_method_name']
+            
+            # Project type filter
+            if filters.get('project_type_name'):
+                query['project_type_name'] = filters['project_type_name']
+            
             # Date range filter
             if filters.get('date_start') and filters.get('date_end'):
                 query['transaction_date'] = {
@@ -90,15 +90,12 @@ class FilterManager:
                     "$lte": datetime.combine(filters['date_end'], datetime.max.time())
                 }
             
-            # Price range filter (convert to actual values)
+            # Price range filter
             price_query = {}
-            
             if filters.get('price_start') is not None:
                 price_query["$gte"] = filters['price_start'] * 1e6
-            
             if filters.get('price_end') is not None:
                 price_query["$lte"] = filters['price_end'] * 1e6
-            
             if price_query:
                 query["sum_price_agree"] = price_query
             

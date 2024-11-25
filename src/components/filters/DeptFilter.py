@@ -1,4 +1,4 @@
-# src/components/filters/DepartmentFilter.py
+# src/components/filters/DeptFilter.py
 
 import streamlit as st
 from typing import Tuple, Optional, List
