@@ -1,16 +1,16 @@
-project_root/
+Equilibrium/
 │
 ├── src/
 │   ├── components/          # Reusable UI components
 │   │   ├── layout/
-│   │   │   ├── Sidebar.py          # Sidebar component with filters
-│   │   │   ├── Header.py           # Header component if needed
-│   │   │   └── MetricsSummary.py   # Top metrics container
+│   │   │   ├── Sidebar.py          # Enhanced sidebar with all filters
+│   │   │   ├── Header.py           # Header component
+│   │   │   └── MetricsSummary.py   # Enhanced metrics with purchase methods & types
 │   │   │
 │   │   ├── filters/
-│   │   │   ├── DepartmentFilter.py
-│   │   │   ├── DateFilter.py
-│   │   │   └── PriceFilter.py
+│   │   │   ├── DepartmentFilter.py    # Department and sub-department filter
+│   │   │   ├── DatePriceFilter.py     # Date range and price range filter
+│   │   │   └── PurchaseTypeFilter.py  # Purchase method and project type filter
 │   │   │
 │   │   ├── tables/
 │   │   │   ├── CompanyTable.py
@@ -22,32 +22,35 @@ project_root/
 │   │       └── DepartmentDistribution.py
 │   │
 │   ├── pages/              # Main application pages
-│   │   ├── Home.py
+│   │   ├── Home.py              # Enhanced home page with new metrics
 │   │   ├── Dashboard.py
 │   │   └── CompanySelection.py
 │   │
 │   ├── services/           # Business logic and data services
 │   │   ├── cache/
-│   │   │   ├── department_cache.py
-│   │   │   └── filter_cache.py
+│   │   │   ├── cache_manager.py       # Generic cache management
+│   │   │   ├── department_cache.py    # Department caching
+│   │   │   ├── purchase_type_cache.py # Purchase method & type caching
+│   │   │   └── filter_cache.py        # Enhanced filter caching
 │   │   │
 │   │   ├── database/
-│   │   │   └── mongodb.py
+│   │   │   └── mongodb.py        # Enhanced with purchase method & type queries
 │   │   │
 │   │   └── analytics/
-│   │       └── metrics.py
+│   │       ├── analytics_service.py  # Enhanced with purchase method & type analysis
+│   │       └── insights_service.py   # Enhanced insights
 │   │
 │   ├── utils/             # Helper functions and utilities
 │   │   ├── date_utils.py
 │   │   ├── format_utils.py
 │   │   └── validation.py
 │   │
-│   └── state/            # State management
-│       ├── session.py
-│       └── filters.py
-│
-├── config/               # Configuration files
-│   ├── logging_config.py
-│   └── app_config.py
+│   ├── state/            # State management
+│   │   ├── session.py     # Enhanced with new filter states
+│   │   └── filters.py     # Enhanced filter management
+│   │
+│   └── config/           # Configuration files
+│       ├── logging_config.py
+│       └── app_config.py
 │
 └── app.py               # Main application entry point
