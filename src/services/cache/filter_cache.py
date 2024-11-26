@@ -53,6 +53,7 @@ class FilterCache:
             logger.info("Fetching fresh data from database")
             with MongoDBService() as db:
                 query = self.filter_manager.build_mongo_query(filters)
+                logger.info(f"MongoDB query: {query}")  # Log the query for debugging
                 df = db.get_projects(query)
             
             if df is not None and not df.empty:
@@ -74,18 +75,28 @@ class FilterCache:
             # Create a deterministic string representation of filters
             key_parts = []
             
+            # Department filters
             if filters.get('dept_name'):
                 key_parts.append(f"dept_{filters['dept_name']}")
             
             if filters.get('dept_sub_name'):
                 key_parts.append(f"subdept_{filters['dept_sub_name']}")
             
+            # Purchase method and project type filters
+            if filters.get('purchase_method_name'):
+                key_parts.append(f"method_{filters['purchase_method_name']}")
+                
+            if filters.get('project_type_name'):
+                key_parts.append(f"type_{filters['project_type_name']}")
+            
+            # Date filters
             if filters.get('date_start'):
                 key_parts.append(f"start_{filters['date_start'].strftime('%Y%m%d')}")
             
             if filters.get('date_end'):
                 key_parts.append(f"end_{filters['date_end'].strftime('%Y%m%d')}")
             
+            # Price filters
             if filters.get('price_start') is not None:
                 key_parts.append(f"price_start_{filters['price_start']}")
             
