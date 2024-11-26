@@ -59,8 +59,8 @@ def main():
                         st.markdown(f"• **{company}**: {count} projects")
                 
                 with col2:
-                    st.subheader("Top Departments by Value")
-                    dept_values = filtered_df.groupby('dept_name')['sum_price_agree'].sum().sort_values(ascending=False).head(5)
+                    st.subheader("Top Sub-departments by Value")
+                    dept_values = filtered_df.groupby('dept_sub_name')['sum_price_agree'].sum().sort_values(ascending=False).head(5)
                     for dept, value in dept_values.items():
                         st.markdown(f"• **{dept}**: {value/1e6:,.2f}M฿")
             else:

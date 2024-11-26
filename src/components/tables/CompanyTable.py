@@ -11,16 +11,7 @@ def CompanyTable(
     editable: bool = False,
     key_prefix: str = ""
 ):
-    """
-    A component that displays company information in a table format with selection capability.
-    
-    Args:
-        df (pd.DataFrame): DataFrame containing company data
-        selected_companies (Optional[List[str]]): List of currently selected company IDs
-        on_selection_change (Optional[Callable]): Callback for selection changes
-        editable (bool): Whether to allow selection/editing
-        key_prefix (str): Prefix for component keys
-    """
+    """A component that displays company information in a table format with selection capability."""
     # Calculate company metrics
     company_metrics = df.groupby('winner').agg({
         'project_name': 'count',
@@ -33,17 +24,12 @@ def CompanyTable(
         'Number of Projects',
         'Total Value',
         'Average Value',
-        'Price Cut %'
+        'Price Cut'
     ]
     
-    # Keep numerical values for sorting
-    company_metrics['Total Value Numeric'] = company_metrics['Total Value']
-    company_metrics['Average Value Numeric'] = company_metrics['Average Value']
-    
-    # Format values for display
-    company_metrics['Total Value'] = company_metrics['Total Value'].apply(lambda x: f"{x/1e6:,.2f}M฿")
-    company_metrics['Average Value'] = company_metrics['Average Value'].apply(lambda x: f"{x/1e6:,.2f}M฿")
-    company_metrics['Price Cut %'] = company_metrics['Price Cut %'].apply(lambda x: f"{x:.2f}%")
+    # Convert values to millions
+    company_metrics['Total Value'] = company_metrics['Total Value'] / 1e6
+    company_metrics['Average Value'] = company_metrics['Average Value'] / 1e6
     
     # Create display DataFrame
     display_df = company_metrics.reset_index()
@@ -53,7 +39,7 @@ def CompanyTable(
         # Add selection column
         display_df.insert(0, 'Select', [
             company in (selected_companies or [])
-            for company in company_metrics.index
+            for company in display_df['Company']
         ])
         
         # Use data editor for editable mode
@@ -71,26 +57,29 @@ def CompanyTable(
                 ),
                 "Number of Projects": st.column_config.NumberColumn(
                     "Projects",
-                    help="Number of projects won"
+                    help="Number of projects won",
+                    format="%d"
                 ),
-                "Total Value": st.column_config.TextColumn(
-                    "Total Value",
-                    help="Total value of all projects"
+                "Total Value": st.column_config.NumberColumn(
+                    "Total Value (M฿)",
+                    help="Total value of all projects in millions",
+                    format="%.2f"
                 ),
-                "Average Value": st.column_config.TextColumn(
-                    "Avg Value",
-                    help="Average project value"
+                "Average Value": st.column_config.NumberColumn(
+                    "Avg Value (M฿)",
+                    help="Average project value in millions",
+                    format="%.2f"
                 ),
-                "Price Cut %": st.column_config.TextColumn(
-                    "Price Cut",
-                    help="Average price cut percentage"
+                "Price Cut": st.column_config.NumberColumn(
+                    "Price Cut (%)",
+                    help="Average price cut percentage",
+                    format="%.2f"
                 )
             },
             hide_index=True,
             key=f"{key_prefix}company_table_editor"
         )
         
-        # Trigger selection change callback
         if on_selection_change and edited_df is not None:
             selected = edited_df[edited_df['Select']]['Company'].tolist()
             on_selection_change(selected)
@@ -106,19 +95,23 @@ def CompanyTable(
                 ),
                 "Number of Projects": st.column_config.NumberColumn(
                     "Projects",
-                    width="small"
+                    width="small",
+                    format="%d"
                 ),
-                "Total Value": st.column_config.TextColumn(
-                    "Total Value",
-                    width="medium"
+                "Total Value": st.column_config.NumberColumn(
+                    "Total Value (M฿)",
+                    width="medium",
+                    format="%.2f"
                 ),
-                "Average Value": st.column_config.TextColumn(
-                    "Avg Value",
-                    width="medium"
+                "Average Value": st.column_config.NumberColumn(
+                    "Avg Value (M฿)",
+                    width="medium",
+                    format="%.2f"
                 ),
-                "Price Cut %": st.column_config.TextColumn(
-                    "Price Cut",
-                    width="small"
+                "Price Cut": st.column_config.NumberColumn(
+                    "Price Cut (%)",
+                    width="small",
+                    format="%.2f"
                 )
             },
             hide_index=True,

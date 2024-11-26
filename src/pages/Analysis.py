@@ -14,6 +14,12 @@ def Analysis():
     """Analysis page with detailed metrics and visualizations"""
     # Initialize session state
     SessionState.initialize_state()
+
+    # Render sidebar and get filters
+    filters = Sidebar(
+        filters=SessionState.get_filters(),
+        selected_companies=SessionState.get_selected_companies()
+    )
     
     # Render header
     Header(current_page="Analysis")

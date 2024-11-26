@@ -2,6 +2,7 @@
 
 import streamlit as st
 from components.layout.Header import Header
+from components.layout.Sidebar import Sidebar
 from components.layout.MetricsSummary import MetricsSummary
 from components.tables.CompanyTable import CompanyTable
 from state.session import SessionState
@@ -10,6 +11,12 @@ def CompanySelection():
     """Company selection page"""
     # Initialize session state
     SessionState.initialize_state()
+
+    # Render sidebar and get filters
+    filters = Sidebar(
+        filters=SessionState.get_filters(),
+        selected_companies=SessionState.get_selected_companies()
+    )
     
     # Render header
     Header(current_page="Company Selection")

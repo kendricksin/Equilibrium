@@ -2,27 +2,18 @@
 
 import streamlit as st
 import pandas as pd
-from datetime import datetime
-from typing import Optional, Dict, Any
-
+from typing import Dict, Optional, Any
 def ProjectsTable(
     df: pd.DataFrame,
     filters: Optional[Dict[str, Any]] = None,
     show_search: bool = True,
     key_prefix: str = ""
 ):
-    """
-    A component that displays project information in a table format.
-    
-    Args:
-        df (pd.DataFrame): DataFrame containing project data
-        filters (Optional[Dict[str, Any]]): Additional filters to apply
-        show_search (bool): Whether to show search/filter controls
-        key_prefix (str): Prefix for component keys
-    """
+    """A component that displays project information in a table format."""
     # Create a copy of the DataFrame for filtering
     display_df = df.copy()
-    
+    display_df['sum_price_agree'] = df['sum_price_agree'] / 1e6
+
     if show_search:
         col1, col2 = st.columns([3, 1])
         
@@ -50,6 +41,7 @@ def ProjectsTable(
                 key=f"{key_prefix}project_sort"
             )
             
+            # Sort using numerical values before formatting
             if sort_by == "Date (Newest)":
                 display_df = display_df.sort_values('transaction_date', ascending=False)
             elif sort_by == "Date (Oldest)":
@@ -59,17 +51,20 @@ def ProjectsTable(
             elif sort_by == "Value (Lowest)":
                 display_df = display_df.sort_values('sum_price_agree', ascending=True)
     
-    # Format dates and values
-    display_df['transaction_date'] = pd.to_datetime(display_df['transaction_date']).dt.strftime('%Y-%m-%d')
-    display_df['sum_price_agree'] = display_df['sum_price_agree'].apply(lambda x: f"{x/1e6:,.2f}M฿")
+    # Keep original numerical values for sorting
+    display_df['value_for_sort'] = display_df['sum_price_agree']
     
-    # Display the table
+    # Format dates and values for display
+    display_df['transaction_date'] = pd.to_datetime(display_df['transaction_date']).dt.strftime('%Y-%m-%d')
+    
+    # Display the table with numerical sorting
     st.dataframe(
         display_df[['transaction_date', 'project_name', 'winner', 'sum_price_agree', 'dept_name']],
         column_config={
-            "transaction_date": st.column_config.TextColumn(
+            "transaction_date": st.column_config.DateColumn(
                 "Date",
-                width="small"
+                width="small",
+                format="YYYY-MM-DD"
             ),
             "project_name": st.column_config.TextColumn(
                 "Project",
@@ -79,9 +74,10 @@ def ProjectsTable(
                 "Company",
                 width="medium"
             ),
-            "sum_price_agree": st.column_config.TextColumn(
+            "sum_price_agree": st.column_config.NumberColumn(
                 "Value",
-                width="small"
+                width="small",
+                format="%.2f M฿"
             ),
             "dept_name": st.column_config.TextColumn(
                 "Department",
@@ -92,5 +88,4 @@ def ProjectsTable(
         key=f"{key_prefix}projects_table"
     )
     
-    # Show summary
     st.markdown(f"Showing {len(display_df)} projects")
