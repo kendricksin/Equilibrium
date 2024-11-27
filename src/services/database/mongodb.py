@@ -153,6 +153,25 @@ class MongoDBService:
             raise ValueError(f"Unknown collection: {collection_name}")
             
         return self.client[self.db_name][self.collections[collection_name]]
+
+    def get_departments(self, cached: bool = True) -> List[str]:
+        """Get unique departments"""
+        try:
+            collection = self.get_collection('projects')
+            return sorted(collection.distinct("dept_name"))
+        except Exception as e:
+            logger.error(f"Error fetching departments: {e}")
+            raise
+    
+    def get_sub_departments(self, dept_name: str) -> List[str]:
+        """Get sub-departments for a given department"""
+        try:
+            collection = self.get_collection('projects')
+            query = {"dept_name": dept_name} if dept_name else {}
+            return sorted(collection.distinct("dept_sub_name", query))
+        except Exception as e:
+            logger.error(f"Error fetching sub-departments: {e}")
+            raise
     
     @retry_on_connection_error()
     def get_projects(
