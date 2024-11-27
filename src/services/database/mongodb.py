@@ -2,7 +2,7 @@
 
 import os
 import logging
-from typing import Optional, Dict, Any, List, Union
+from typing import Optional, Dict, Any, List, Union, Generator
 from pymongo import MongoClient, errors
 from pymongo.collection import Collection
 from datetime import datetime
