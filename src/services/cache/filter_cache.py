@@ -21,18 +21,10 @@ class FilterCache:
     def get_filtered_data(
         self,
         filters: Dict[str, Any],
-        force_refresh: bool = False
+        force_refresh: bool = False,
+        chunk_size: int = 1000,
+        max_documents: int = 10000
     ) -> Optional[pd.DataFrame]:
-        """
-        Get filtered data with caching
-        
-        Args:
-            filters (Dict[str, Any]): Filter parameters
-            force_refresh (bool): Force data refresh
-            
-        Returns:
-            Optional[pd.DataFrame]: Filtered DataFrame
-        """
         try:
             # Validate filters
             if not self.filter_manager.validate_filters(filters):
@@ -46,23 +38,22 @@ class FilterCache:
             if not force_refresh:
                 cached_data = self.cache.get(cache_key)
                 if cached_data is not None:
-                    logger.info(f"Retrieved cached data for key: {cache_key}")
                     return cached_data
             
             # Get fresh data from database
-            logger.info("Fetching fresh data from database")
             with MongoDBService() as db:
                 query = self.filter_manager.build_mongo_query(filters)
-                logger.info(f"MongoDB query: {query}")  # Log the query for debugging
-                df = db.get_projects(query)
+                df = db.get_projects(
+                    query,
+                    chunk_size=chunk_size,
+                    max_documents=max_documents
+                )
             
             if df is not None and not df.empty:
                 # Cache the results
-                self.cache.set(cache_key, df, ttl=3600)  # Cache for 1 hour
-                logger.info(f"Cached new data for key: {cache_key}")
+                self.cache.set(cache_key, df, ttl=3600)
                 return df
             
-            logger.warning("No data found for the given filters")
             return None
             
         except Exception as e:
