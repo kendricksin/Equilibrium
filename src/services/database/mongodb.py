@@ -159,36 +159,54 @@ class MongoDBService:
         self,
         query: Dict[str, Any],
         projection: Optional[Dict[str, Any]] = None,
-        limit: Optional[int] = None
+        chunk_size: int = 1000,
+        max_documents: int = 10000
     ) -> pd.DataFrame:
         """
-        Fetch projects based on query parameters
+        Fetch projects based on query parameters with chunking and limits
         
         Args:
             query (Dict[str, Any]): MongoDB query parameters
             projection (Optional[Dict[str, Any]]): Fields to include/exclude
-            limit (Optional[int]): Maximum number of documents to return
+            chunk_size (int): Number of documents per chunk
+            max_documents (int): Maximum total documents to return
             
         Returns:
             pd.DataFrame: DataFrame containing project data
         """
         try:
             collection = self.get_collection('projects')
-            cursor = collection.find(query, projection)
             
-            if limit:
-                cursor = cursor.limit(limit)
+            # First get total count
+            total_count = collection.count_documents(query)
+            logger.info(f"Total matching documents: {total_count}")
             
-            data = list(cursor)
+            if total_count > max_documents:
+                logger.warning(f"Query would return {total_count} documents, limiting to {max_documents}")
+                
+            # Process in chunks
+            all_data = []
+            processed_count = 0
             
-            if not data:
+            for chunk in self._get_documents_in_chunks(
+                collection, query, projection, chunk_size, max_documents
+            ):
+                all_data.extend(chunk)
+                processed_count += len(chunk)
+                logger.info(f"Processed {processed_count} documents")
+                
+                if processed_count >= max_documents:
+                    logger.warning("Reached maximum document limit")
+                    break
+            
+            if not all_data:
                 logger.warning("No data found for the given query")
                 return pd.DataFrame()
             
-            df = pd.DataFrame(data)
+            df = pd.DataFrame(all_data)
             
             # Convert date columns
-            date_columns = ['announce_date', 'transaction_date', 'contract_date', 'contract_finish_date']
+            date_columns = ['announce_date', 'transaction_date', 'contract_date']
             for col in date_columns:
                 if col in df.columns:
                     df[col] = pd.to_datetime(df[col])
@@ -205,23 +223,44 @@ class MongoDBService:
             logger.error(f"Error fetching projects: {e}")
             raise
     
-    def get_departments(self, cached: bool = True) -> List[str]:
-        """Get unique departments"""
+    def _get_documents_in_chunks(
+        self,
+        collection,
+        query: Dict[str, Any],
+        projection: Optional[Dict[str, Any]],
+        chunk_size: int,
+        max_documents: int
+    ) -> Generator[List[Dict], None, None]:
+        """
+        Generator function to fetch documents in chunks
+        """
         try:
-            collection = self.get_collection('projects')
-            return sorted(collection.distinct("dept_name"))
+            processed = 0
+            cursor = collection.find(query, projection).sort('_id', 1)
+            
+            while True:
+                chunk = []
+                for _ in range(chunk_size):
+                    try:
+                        doc = next(cursor)
+                        chunk.append(doc)
+                        processed += 1
+                        
+                        if processed >= max_documents:
+                            break
+                    except StopIteration:
+                        break
+                
+                if not chunk:
+                    break
+                    
+                yield chunk
+                
+                if processed >= max_documents:
+                    break
+                    
         except Exception as e:
-            logger.error(f"Error fetching departments: {e}")
-            raise
-    
-    def get_sub_departments(self, dept_name: str) -> List[str]:
-        """Get sub-departments for a given department"""
-        try:
-            collection = self.get_collection('projects')
-            query = {"dept_name": dept_name} if dept_name else {}
-            return sorted(collection.distinct("dept_sub_name", query))
-        except Exception as e:
-            logger.error(f"Error fetching sub-departments: {e}")
+            logger.error(f"Error in chunk processing: {e}")
             raise
 
     @staticmethod
