@@ -51,7 +51,6 @@ def main():
 
                 if len(filtered_df) >= 10000:
                     st.warning("Results have been limited to 10,000 records. Please apply more specific filters to see all matching data.")
-                ProjectsTable(filtered_df, filters=filters, show_search=True, key_prefix="main_")
                 
                 st.header("Quick Stats")
                 col1, col2 = st.columns(2)
