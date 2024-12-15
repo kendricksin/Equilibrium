@@ -14,3 +14,5 @@ diagnostic_runner.py
 env_diagnostic.py
 load_dotenv.py
 mongo_test.py
+price_issue.py
+price_validation_results.csv

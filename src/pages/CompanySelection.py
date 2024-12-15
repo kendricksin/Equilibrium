@@ -84,12 +84,12 @@ def CompanySelection():
             
             with col2:
                 if selected_companies:
-                    if st.button("📊 View Analysis", type="primary", use_container_width=True):
-                        st.session_state.current_page = 'analysis'
+                    if st.button("📊 Compare Companies", type="primary", use_container_width=True):
+                        st.session_state.current_page = 'company_comparison'
                         st.rerun()
                 else:
                     st.button(
-                        "📊 View Analysis",
+                        "📊 Compare Companies",
                         type="primary",
                         disabled=True,
                         use_container_width=True
