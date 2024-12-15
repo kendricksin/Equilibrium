@@ -16,3 +16,4 @@ load_dotenv.py
 mongo_test.py
 price_issue.py
 price_validation_results.csv
+tag_data.py

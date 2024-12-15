@@ -3,6 +3,7 @@
 import streamlit as st
 import pandas as pd
 from typing import Dict, Optional, Any
+
 def ProjectsTable(
     df: pd.DataFrame,
     filters: Optional[Dict[str, Any]] = None,
@@ -12,7 +13,13 @@ def ProjectsTable(
     """A component that displays project information in a table format."""
     # Create a copy of the DataFrame for filtering
     display_df = df.copy()
+    
+    # Convert values to millions
     display_df['sum_price_agree'] = df['sum_price_agree'] / 1e6
+    display_df['price_build'] = df['price_build'] / 1e6
+    
+    # Calculate price cut percentage
+    display_df['price_cut'] = ((df['sum_price_agree'] / df['price_build'] - 1) * 100).round(2)
 
     if show_search:
         col1, col2 = st.columns([3, 1])
@@ -36,7 +43,9 @@ def ProjectsTable(
                     "Date (Newest)",
                     "Date (Oldest)",
                     "Value (Highest)",
-                    "Value (Lowest)"
+                    "Value (Lowest)",
+                    "Price Cut (Highest)",
+                    "Price Cut (Lowest)"
                 ],
                 key=f"{key_prefix}project_sort"
             )
@@ -50,6 +59,10 @@ def ProjectsTable(
                 display_df = display_df.sort_values('sum_price_agree', ascending=False)
             elif sort_by == "Value (Lowest)":
                 display_df = display_df.sort_values('sum_price_agree', ascending=True)
+            elif sort_by == "Price Cut (Highest)":
+                display_df = display_df.sort_values('price_cut', ascending=False)
+            elif sort_by == "Price Cut (Lowest)":
+                display_df = display_df.sort_values('price_cut', ascending=True)
     
     # Keep original numerical values for sorting
     display_df['value_for_sort'] = display_df['sum_price_agree']
@@ -59,7 +72,15 @@ def ProjectsTable(
     
     # Display the table with numerical sorting
     st.dataframe(
-        display_df[['transaction_date', 'project_name', 'winner', 'sum_price_agree', 'dept_name']],
+        display_df[[
+            'transaction_date', 
+            'project_name', 
+            'winner', 
+            'price_build',
+            'sum_price_agree', 
+            'price_cut',
+            'dept_name'
+        ]],
         column_config={
             "transaction_date": st.column_config.DateColumn(
                 "Date",
@@ -74,10 +95,21 @@ def ProjectsTable(
                 "Company",
                 width="medium"
             ),
-            "sum_price_agree": st.column_config.NumberColumn(
-                "Value",
+            "price_build": st.column_config.NumberColumn(
+                "Budget",
                 width="small",
                 format="%.2f M฿"
+            ),
+            "sum_price_agree": st.column_config.NumberColumn(
+                "Final Value",
+                width="small",
+                format="%.2f M฿"
+            ),
+            "price_cut": st.column_config.NumberColumn(
+                "Price Cut",
+                width="small",
+                format="%.2f%%",
+                help="Percentage difference between budget and final value"
             ),
             "dept_name": st.column_config.TextColumn(
                 "Department",

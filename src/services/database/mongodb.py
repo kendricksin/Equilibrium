@@ -179,7 +179,8 @@ class MongoDBService:
         query: Dict[str, Any],
         projection: Optional[Dict[str, Any]] = None,
         chunk_size: int = 1000,
-        max_documents: int = 10000
+        max_documents: int = 10000,
+        include_flagged: bool = False
     ) -> pd.DataFrame:
         """
         Fetch projects based on query parameters with chunking and limits
@@ -189,12 +190,30 @@ class MongoDBService:
             projection (Optional[Dict[str, Any]]): Fields to include/exclude
             chunk_size (int): Number of documents per chunk
             max_documents (int): Maximum total documents to return
-            
+            include_flagged (bool): Whether to include documents with data quality issues
+                
         Returns:
             pd.DataFrame: DataFrame containing project data
         """
         try:
             collection = self.get_collection('projects')
+            
+            # Add data quality filter to query unless explicitly including flagged documents
+            if not include_flagged:
+                # Modify query to exclude documents with data quality tags
+                if "$and" in query:
+                    query["$and"].append({"data_quality": {"$exists": False}})
+                elif query:
+                    query = {
+                        "$and": [
+                            query,
+                            {"data_quality": {"$exists": False}}
+                        ]
+                    }
+                else:
+                    query = {"data_quality": {"$exists": False}}
+                
+                logger.info("Excluding documents with data quality issues")
             
             # First get total count
             total_count = collection.count_documents(query)
@@ -235,6 +254,14 @@ class MongoDBService:
             for col in numeric_columns:
                 if col in df.columns:
                     df[col] = pd.to_numeric(df[col], errors='coerce')
+            
+            # Add flag column if including flagged documents
+            if include_flagged and not df.empty:
+                df['is_flagged'] = df['data_quality'].notna()
+                if 'data_quality' in df.columns:
+                    df['flag_type'] = df['data_quality'].apply(
+                        lambda x: x.get('issue_type') if pd.notna(x) else None
+                    )
             
             return df
             
