@@ -160,9 +160,9 @@ def MetricsSummary(df: Optional[pd.DataFrame] = None):
                 with col5:
                     st.metric(
                         label="Price Cut",
-                        value=f"{abs(avg_price_cut):.1f}%",
-                        delta="below budget" if avg_price_cut < 0 else "over budget",
-                        delta_color="normal" if avg_price_cut < 0 else "inverse",
+                        value=f"{(avg_price_cut):.1f}%",
+                        delta="Competitive" if avg_price_cut < -5 else "Fair",
+                        delta_color="inverse" if avg_price_cut < -5 else "normal",
                         help="Average percentage difference between agreed price and budget"
                     )
                 
