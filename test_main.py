@@ -3,7 +3,7 @@ import pymongo
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import streamlit as st
-from datetime import datetime, UTC
+from datetime import datetime
 
 def create_aggregation_collection(db):
     """Create and populate the department distribution aggregation collection"""
@@ -47,7 +47,7 @@ def create_aggregation_collection(db):
     
     db.department_distribution.insert_one({
         "_id": "metadata",
-        "last_updated": datetime.now(UTC),
+        "last_updated": datetime.now(),
         "total_projects": total_docs,
         "total_value": total_value
     })
@@ -270,7 +270,7 @@ def main():
         with col2:
             st.markdown(f"Total Value: **฿{distribution_data['total_value']/1e6:,.2f}M**")
         with col3:
-            st.markdown(f"Last Updated: **{distribution_data['last_updated'].strftime('%Y-%m-%d %H:%M UTC')}**")
+            st.markdown(f"Last Updated: **{distribution_data['last_updated'].strftime('%Y-%m-%d %H:%M')}**")
         
         # Create and display department charts
         dept_fig = create_department_charts(distribution_data)
