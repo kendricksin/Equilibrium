@@ -4,7 +4,9 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import streamlit as st
 from datetime import datetime
+from dotenv import load_dotenv
 
+load_dotenv()
 def create_aggregation_collection(db):
     """Create and populate the department distribution aggregation collection"""
     if "department_distribution" in db.list_collection_names():
