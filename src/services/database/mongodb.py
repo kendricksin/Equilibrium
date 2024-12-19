@@ -2,10 +2,10 @@
 
 import os
 import logging
-from typing import Optional, Dict, Any, List, Union, Generator
+from typing import Optional, Dict, Any, List, Generator
 from pymongo import MongoClient, errors
 from pymongo.collection import Collection
-from datetime import datetime
+from pymongo.database import Database
 import pandas as pd
 from functools import wraps
 import json
@@ -101,14 +101,14 @@ class MongoDBService:
             cls._instance = super().__new__(cls)
             cls._config = DatabaseConfig.load_config(config_path)
         return cls._instance
-    
-    def __init__(self, config_path: Optional[str] = None):
-        # Initialize only once
-        if not hasattr(self, 'client'):
-            self.client: Optional[MongoClient] = None
-            self.db_name = self._config['db_name']
-            self.collections = self._config['collections']
-    
+
+    def __init__(self):
+        load_dotenv(override=True)
+        self.mongo_uri = os.getenv('MONGO_URI')
+        self.db_name = 'projects'  # Explicitly set database name
+        self._client: Optional[MongoClient] = None
+        self._database: Optional[Database] = None
+        
     def __enter__(self):
         self.connect()
         return self
@@ -118,42 +118,167 @@ class MongoDBService:
     
     @retry_on_connection_error()
     def connect(self):
-        """Establish connection to MongoDB with retry logic"""
-        if not self.client:
-            try:
-                self.client = MongoClient(self._config['mongo_uri'])
+        """Establish connection to MongoDB"""
+        try:
+            if self._client is None:
+                self._client = MongoClient(self.mongo_uri)
+                self._database = self._client[self.db_name]
                 # Test connection
-                self.client.admin.command('ismaster')
-                logger.info("Successfully connected to MongoDB")
-            except Exception as e:
-                logger.error(f"Failed to connect to MongoDB: {e}")
-                raise
+                self._client.admin.command('ismaster')
+                logger.info(f"Successfully connected to MongoDB database: {self.db_name}")
+                
+                # Verify collections
+                collections = self._database.list_collection_names()
+                logger.info(f"Available collections: {collections}")
+                
+        except Exception as e:
+            logger.error(f"Failed to connect to MongoDB: {e}")
+            raise
     
     def disconnect(self):
         """Close MongoDB connection"""
-        if self.client:
-            self.client.close()
-            self.client = None
-            logger.info("Disconnected from MongoDB")
+        try:
+            if self._client is not None:
+                self._client.close()
+                self._client = None
+                self._database = None
+                logger.info("Disconnected from MongoDB")
+        except Exception as e:
+            logger.error(f"Error disconnecting from MongoDB: {e}")
     
     def get_collection(self, collection_name: str = 'projects') -> Collection:
-        """
-        Get MongoDB collection
-        
-        Args:
-            collection_name (str): Name of the collection
+        """Get MongoDB collection"""
+        try:
+            if self._database is None:
+                self.connect()
             
-        Returns:
-            Collection: MongoDB collection
-        """
-        if not self.client:
-            self.connect()
-        
-        if collection_name not in self.collections:
-            raise ValueError(f"Unknown collection: {collection_name}")
+            if self._database is None:
+                raise ValueError("Database connection not established")
             
-        return self.client[self.db_name][self.collections[collection_name]]
+            # Verify collection exists
+            collections = self._database.list_collection_names()
+            if collection_name not in collections:
+                raise ValueError(f"Collection '{collection_name}' not found in database '{self.db_name}'. Available collections: {collections}")
+            
+            return self._database[collection_name]
+            
+        except Exception as e:
+            logger.error(f"Error accessing collection {collection_name}: {e}")
+            raise
 
+    def get_department_summary(self, view_by: str = "count", limit: int = 20) -> List[Dict]:
+        """Get department summary with sorting and pre-calculated metrics"""
+        try:
+            if self._database is None:
+                self.connect()
+                
+            sort_field = "count" if view_by == "count" else "total_value"
+            collection = self.get_collection("department_distribution")
+            
+            pipeline = [
+                # Match non-totals documents
+                {"$match": {"_id": {"$ne": "totals"}}},
+                
+                # Group by department
+                {
+                    "$group": {
+                        "_id": "$_id.dept",
+                        "count": {"$sum": "$count"},
+                        "total_value": {"$sum": "$total_value"},
+                        "count_percentage": {"$sum": "$count_percentage"},
+                        "value_percentage": {"$sum": "$value_percentage"},
+                        "unique_companies": {"$max": "$unique_companies"}
+                    }
+                },
+                
+                # Format for output
+                {
+                    "$project": {
+                        "department": "$_id",
+                        "count": 1,
+                        "total_value": 1,
+                        "count_percentage": 1,
+                        "value_percentage": 1,
+                        "unique_companies": 1,
+                        "total_value_millions": {"$divide": ["$total_value", 1000000]}
+                    }
+                },
+                
+                # Sort by selected field
+                {"$sort": {sort_field: -1}},
+                
+                # Limit results
+                {"$limit": limit}
+            ]
+            
+            return list(collection.aggregate(pipeline))
+            
+        except Exception as e:
+            logger.error(f"Error getting department summary: {e}")
+            raise
+
+    def get_subdepartment_data(self, department: str) -> List[Dict]:
+        """Get sub-department data for a specific department"""
+        try:
+            if self._database is None:
+                self.connect()
+                
+            collection = self.get_collection("department_distribution")
+            
+            pipeline = [
+                # Match specific department
+                {
+                    "$match": {
+                        "_id.dept": department,
+                        "_id": {"$ne": "totals"}
+                    }
+                },
+                
+                # Calculate department totals for percentages
+                {
+                    "$group": {
+                        "_id": None,
+                        "documents": {"$push": "$$ROOT"},
+                        "dept_total_count": {"$sum": "$count"},
+                        "dept_total_value": {"$sum": "$total_value"}
+                    }
+                },
+                
+                # Unwind back to individual documents
+                {"$unwind": "$documents"},
+                
+                # Calculate subdepartment percentages
+                {
+                    "$project": {
+                        "subdepartment": "$documents._id.subdept",
+                        "count": "$documents.count",
+                        "total_value": "$documents.total_value",
+                        "unique_companies": "$documents.unique_companies",
+                        "total_value_millions": {"$divide": ["$documents.total_value", 1000000]},
+                        "count_percentage": {
+                            "$multiply": [
+                                {"$divide": ["$documents.count", "$dept_total_count"]},
+                                100
+                            ]
+                        },
+                        "value_percentage": {
+                            "$multiply": [
+                                {"$divide": ["$documents.total_value", "$dept_total_value"]},
+                                100
+                            ]
+                        }
+                    }
+                },
+                
+                # Sort by count
+                {"$sort": {"count": -1}}
+            ]
+            
+            return list(collection.aggregate(pipeline))
+            
+        except Exception as e:
+            logger.error(f"Error getting subdepartment data: {e}")
+            raise
     def get_departments(self, cached: bool = True) -> List[str]:
         """Get unique departments"""
         try:
@@ -172,7 +297,7 @@ class MongoDBService:
         except Exception as e:
             logger.error(f"Error fetching sub-departments: {e}")
             raise
-    
+
     @retry_on_connection_error()
     def get_projects(
         self,
