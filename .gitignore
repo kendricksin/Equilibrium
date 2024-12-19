@@ -1,14 +1,41 @@
-eqb/
+# Python cache files
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+*.so
+
+# Distribution / packaging
+dist/
+build/
+*.egg-info/
+
+# Virtual Environment
+venv/
+env/
 .env
-scripts/
-src/__pycache__/
+
+# IDE specific files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Cache files
 cache/
+*.cache
+*.meta
 cache/departments.cache
 cache/departments.meta
-.vscode/
-src/layout/__pycache__/
-src/tables/__pycache__/
-src/pages/__pycache__/
-src/services/__pycache__/
-src/state/__pycache__/
+
+# Project specific
+scripts/
 local_test_scripts/
+eqb/
+
+# Logs
+*.log
+
+# Local development
+.DS_Store
+.vscode
