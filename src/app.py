@@ -116,7 +116,7 @@ def main():
                 custom_data=custom_data,
                 title="Department Distribution",
                 height=600,
-                color_scheme='Blues',
+                color_scheme='Reds',
                 show_percentages=True,
                 layout_options={
                     "margin": dict(t=50, l=10, r=10, b=10),
@@ -198,7 +198,7 @@ def main():
                         custom_data=custom_data,
                         title=f"Sub-departments of {selected_dept}",
                         height=400,
-                        color_scheme='Blues',
+                        color_scheme='Reds',
                         show_percentages=True,
                         text_template="<b>{}</b><br>{:.1f}%"
                     )
