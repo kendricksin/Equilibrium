@@ -22,7 +22,6 @@ env/
 *.swo
 
 # Cache files
-cache/
 *.cache
 *.meta
 cache/departments.cache
