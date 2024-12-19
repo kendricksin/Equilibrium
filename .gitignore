@@ -23,6 +23,7 @@ env/
 
 # Cache files
 cache/
+dept_cache/
 *.cache
 *.meta
 cache/departments.cache
