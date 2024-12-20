@@ -87,25 +87,19 @@ def main():
                 hover_data = {
                     'department': '%{label}',
                     'count': 'Projects: %{value:,}',
-                    'total_value_millions': 'Value: ฿%{customdata[0]:.1f}M',
-                    'unique_companies': 'Companies: %{customdata[1]:,}'
+                    'total_value_millions': 'Value: ฿%{customdata.total_value_millions:.1f}M',
+                    'unique_companies': 'Companies: %{customdata.unique_companies:,}'
                 }
-                custom_data = [
-                    dept_df['total_value_millions'].tolist(),
-                    dept_df['unique_companies'].tolist()
-                ]
+                custom_data = dept_df[['total_value_millions', 'unique_companies']].to_dict('records')
             else:
                 value_col = 'total_value_millions'
                 hover_data = {
                     'department': '%{label}',
                     'total_value_millions': 'Value: ฿%{value:.1f}M',
-                    'count': 'Projects: %{customdata[0]:,}',
-                    'unique_companies': 'Companies: %{customdata[1]:,}'
+                    'count': 'Projects: %{customdata.count:,}',
+                    'unique_companies': 'Companies: %{customdata.unique_companies:,}'
                 }
-                custom_data = [
-                    dept_df['count'].tolist(),
-                    dept_df['unique_companies'].tolist()
-                ]
+                custom_data = dept_df[['count', 'unique_companies']].to_dict('records')
 
             # Create department treemap
             fig = TreemapService.create_treemap(
@@ -163,31 +157,25 @@ def main():
                         horizontal=True,
                         key="subdept_metric"
                     )
-                    
+
                     if metric_choice == "Project Count":
                         value_col = 'count'
                         hover_data = {
                             'subdepartment': '%{label}',
                             'count': 'Projects: %{value:,}',
-                            'total_value_millions': 'Value: ฿%{customdata[0]:.1f}M',
-                            'unique_companies': 'Companies: %{customdata[1]:,}'
+                            'total_value_millions': 'Value: ฿%{customdata.total_value_millions:.1f}M',
+                            'unique_companies': 'Companies: %{customdata.unique_companies:,}'
                         }
-                        custom_data = [
-                            subdept_df['total_value_millions'].tolist(),
-                            subdept_df['unique_companies'].tolist()
-                        ]
+                        custom_data = subdept_df[['total_value_millions', 'unique_companies']].to_dict('records')
                     else:
                         value_col = 'total_value_millions'
                         hover_data = {
                             'subdepartment': '%{label}',
                             'total_value_millions': 'Value: ฿%{value:.1f}M',
-                            'count': 'Projects: %{customdata[0]:,}',
-                            'unique_companies': 'Companies: %{customdata[1]:,}'
+                            'count': 'Projects: %{customdata.count:,}',
+                            'unique_companies': 'Companies: %{customdata.unique_companies:,}'
                         }
-                        custom_data = [
-                            subdept_df['count'].tolist(),
-                            subdept_df['unique_companies'].tolist()
-                        ]
+                        custom_data = subdept_df[['count', 'unique_companies']].to_dict('records')
 
                     # Create subdepartment treemap
                     subdept_fig = TreemapService.create_treemap(
