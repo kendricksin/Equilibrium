@@ -7,7 +7,6 @@ from datetime import datetime
 from services.database.mongodb import MongoDBService
 from services.cache.cache_manager import CacheManager
 from state.filters import FilterManager
-from state.session import SessionState
 
 logger = logging.getLogger(__name__)
 
@@ -17,6 +16,7 @@ class FilterCache:
     def __init__(self):
         self.cache = CacheManager()
         self.filter_manager = FilterManager()
+        self.db = MongoDBService()  # Keep a single instance
     
     def get_filtered_data(
         self,
@@ -25,6 +25,7 @@ class FilterCache:
         chunk_size: int = 1000,
         max_documents: int = 10000
     ) -> Optional[pd.DataFrame]:
+        """Get filtered data with caching"""
         try:
             # Validate filters
             if not self.filter_manager.validate_filters(filters):
@@ -38,32 +39,33 @@ class FilterCache:
             if not force_refresh:
                 cached_data = self.cache.get(cache_key)
                 if cached_data is not None:
+                    logger.info(f"Retrieved cached data for key: {cache_key}")
                     return cached_data
             
             # Get fresh data from database
-            with MongoDBService() as db:
-                query = self.filter_manager.build_mongo_query(filters)
-                df = db.get_projects(
-                    query,
-                    chunk_size=chunk_size,
-                    max_documents=max_documents
-                )
+            query = self.filter_manager.build_mongo_query(filters)
+            df = self.db.get_projects(
+                query,
+                chunk_size=chunk_size,
+                max_documents=max_documents
+            )
             
             if df is not None and not df.empty:
                 # Cache the results
                 self.cache.set(cache_key, df, ttl=3600)
+                logger.info(f"Cached new data for key: {cache_key}")
                 return df
             
+            logger.warning("No data found for the given filters")
             return None
             
         except Exception as e:
-            logger.error(f"Error getting filtered data: {e}")
+            logger.error(f"Error getting filtered data: {e}", exc_info=True)
             return None
-    
+
     def _generate_cache_key(self, filters: Dict[str, Any]) -> str:
         """Generate cache key from filters"""
         try:
-            # Create a deterministic string representation of filters
             key_parts = []
             
             # Department filters
@@ -97,7 +99,7 @@ class FilterCache:
             return "filter_" + "_".join(key_parts)
             
         except Exception as e:
-            logger.error(f"Error generating cache key: {e}")
+            logger.error(f"Error generating cache key: {e}", exc_info=True)
             return f"filter_error_{datetime.now().timestamp()}"
     
     def invalidate_cache(self, pattern: Optional[str] = None):
@@ -115,13 +117,15 @@ class FilterCache:
                 self.cache.invalidate("filter_*")
                 logger.info("Invalidated all filter cache entries")
         except Exception as e:
-            logger.error(f"Error invalidating cache: {e}")
+            logger.error(f"Error invalidating cache: {e}", exc_info=True)
 
 # Create a singleton instance of FilterCache
 _filter_cache = FilterCache()
 
-# Export the get_filtered_data function
-def get_filtered_data(filters: Dict[str, Any], force_refresh: bool = False) -> Optional[pd.DataFrame]:
+def get_filtered_data(
+    filters: Dict[str, Any], 
+    force_refresh: bool = False
+) -> Optional[pd.DataFrame]:
     """
     Get filtered data with caching (helper function)
     
