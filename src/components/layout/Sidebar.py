@@ -16,7 +16,7 @@ def Sidebar(
     selected_companies: Optional[list] = None,
     on_filter_change: Optional[callable] = None
 ) -> Dict[str, Any]:
-    """Sidebar component with enhanced filters"""
+    """Sidebar component with enhanced filters and home redirection"""
     with st.sidebar:
         st.markdown("### 🔍 Filters")
         
@@ -74,16 +74,27 @@ def Sidebar(
         
         # Apply Filters button
         if st.button("🔄 Apply Filters", type="primary", use_container_width=True):
+            # Update filters
             SessionState.update_filters(new_filters)
             st.session_state.filters_applied = True
+            
+            # Set navigation target
+            st.session_state.next_page = 'Home'
+            
+            # Call filter change callback if provided
             if on_filter_change:
                 on_filter_change(new_filters)
-            st.rerun()
+            
+            # Use streamlit's native navigation
+            st.switch_page("pages/Home.py")
             
         # Clear Filters button
         if st.button("❌ Clear Filters", use_container_width=True):
             SessionState.clear_filters()
-            st.rerun()
+            # Set navigation target
+            st.session_state.next_page = 'Home'
+            # Use streamlit's native navigation
+            st.switch_page("pages/Home.py")
         
         # Selection summary
         if selected_companies:
@@ -92,7 +103,7 @@ def Sidebar(
             st.markdown(f"**Selected Companies:** {len(selected_companies)}")
             
             if st.button("✏️ Modify Selection", use_container_width=True):
-                st.session_state.current_page = 'company_selection'
-                st.rerun()
+                st.session_state.next_page = 'CompanySelection'
+                st.switch_page("pages/CompanySelection.py")
         
         return filters

@@ -6,6 +6,7 @@ import pandas as pd
 from services.database.mongodb import MongoDBService
 from services.analytics.treemap_serivce import TreemapService
 from state.session import SessionState
+from components.layout.Sidebar import Sidebar
 import logging
 
 st.set_page_config(layout="wide")
@@ -15,6 +16,10 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+def handle_filter_change(new_filters):
+    """Handle filter changes and redirect to home"""
+    st.session_state.current_page = 'home'
 
 def process_department_data(collection):
     """Process department distribution data from MongoDB collection"""
@@ -42,6 +47,16 @@ def main():
     """Department and sub-department analysis page using aggregated data"""
     try:
         mongo_service = MongoDBService()
+
+        # Initialize session state
+        SessionState.initialize_state()
+        
+        # Add sidebar with filter handling
+        filters = Sidebar(
+            filters=SessionState.get_filters(),
+            selected_companies=SessionState.get_selected_companies(),
+            on_filter_change=handle_filter_change
+        )
         
         try:
             # Get metadata
