@@ -55,18 +55,24 @@ def StackedCompany():
     if time_period == "Year":
         df['time_group'] = df['transaction_date'].dt.year
     elif time_period == "Quarter":
-        df['time_group'] = df['transaction_date'].dt.to_period('Q').astype(str)
+        # Create a sortable quarter format (YYYY-Q)
+        df['time_group'] = (df['transaction_date'].dt.year.astype(str) + "-Q" + 
+                        df['transaction_date'].dt.quarter.astype(str))
     else:
-        df['time_group'] = df['transaction_date'].dt.to_period('M').astype(str)
+        # Create a sortable month format (YYYY-MM)
+        df['time_group'] = df['transaction_date'].dt.strftime('%Y-%m')
 
     # Get top companies by total value
     top_companies = df.groupby('winner')['sum_price_agree'].sum().nlargest(num_companies).index
 
-    # Filter for top companies
+    # Filter for top companies and sort by time_group
     company_data = df[df['winner'].isin(top_companies)].groupby(['time_group', 'winner']).agg({
-    'sum_price_agree': 'sum',
-    'project_id': 'count'
+        'sum_price_agree': 'sum',
+        'project_id': 'count'
     }).reset_index()
+
+    # Sort by time_group to ensure chronological order
+    company_data = company_data.sort_values('time_group')
 
     company_data['sum_price_agree'] = company_data['sum_price_agree'] / 1e6
 
