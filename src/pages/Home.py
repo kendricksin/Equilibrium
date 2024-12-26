@@ -8,6 +8,8 @@ from components.tables.ProjectsTable import ProjectsTable
 from services.cache.filter_cache import get_filtered_data
 from state.session import SessionState
 
+st.set_page_config(layout="wide")
+
 def Home():
     """Main home page of the application."""
     # Initialize session state

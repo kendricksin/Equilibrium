@@ -78,7 +78,7 @@ def Analysis():
                 # Time series analysis with progress indicator
                 st.subheader("Project Timeline")
                 with st.spinner("Generating timeline..."):
-                    monthly_data = df.resample('M', on='transaction_date').agg({
+                    monthly_data = df.resample('ME', on='transaction_date').agg({
                         'project_name': 'count',
                         'sum_price_agree': 'sum'
                     })
