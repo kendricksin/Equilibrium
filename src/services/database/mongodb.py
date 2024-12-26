@@ -166,7 +166,7 @@ class MongoDBService:
             logger.error(f"Error accessing collection {collection_name}: {e}")
             raise
 
-    def get_department_summary(self, view_by: str = "count", limit: int = 20) -> List[Dict]:
+    def get_department_summary(self, view_by: str = "count", limit: Optional[int] = None) -> List[Dict]:
         """Get department summary with sorting and pre-calculated metrics"""
         try:
             if self._database is None:
@@ -206,10 +206,11 @@ class MongoDBService:
                 
                 # Sort by selected field
                 {"$sort": {sort_field: -1}},
-                
-                # Limit results
-                {"$limit": limit}
             ]
+            
+            # Only add limit stage if specified
+            if limit is not None and limit > 0:
+                pipeline.append({"$limit": limit})
             
             return list(collection.aggregate(pipeline))
             
@@ -217,7 +218,7 @@ class MongoDBService:
             logger.error(f"Error getting department summary: {e}")
             raise
 
-    def get_subdepartment_data(self, department: str) -> List[Dict]:
+    def get_subdepartment_data(self, department: str, limit: Optional[int] = None) -> List[Dict]:
         """Get sub-department data for a specific department"""
         try:
             if self._database is None:
@@ -274,11 +275,16 @@ class MongoDBService:
                 {"$sort": {"count": -1}}
             ]
             
+            # Only add limit stage if specified
+            if limit is not None and limit > 0:
+                pipeline.append({"$limit": limit})
+            
             return list(collection.aggregate(pipeline))
             
         except Exception as e:
             logger.error(f"Error getting subdepartment data: {e}")
             raise
+
     def get_departments(self, cached: bool = True) -> List[str]:
         """Get unique departments"""
         try:

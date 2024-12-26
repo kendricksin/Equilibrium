@@ -5,6 +5,7 @@ import plotly.graph_objects as go
 import pandas as pd
 from services.database.mongodb import MongoDBService
 from services.analytics.treemap_serivce import TreemapService
+from services.cache.department_cache import get_departments, get_department_stats
 from state.session import SessionState
 from components.layout.Sidebar import Sidebar
 import logging
@@ -47,7 +48,7 @@ def main():
     """Department and sub-department analysis page using aggregated data"""
     try:
         mongo_service = MongoDBService()
-
+        
         # Initialize session state
         SessionState.initialize_state()
         
@@ -88,13 +89,15 @@ def main():
                 horizontal=True
             )
             
-            # Get pre-aggregated department data
+            # Get pre-aggregated department data with limit
             dept_data = mongo_service.get_department_summary(
-                view_by="count" if view_type == "Project Count" else "total_value"
+                view_by="count" if view_type == "Project Count" else "total_value",
+                limit=20 #Show top 20 departments
             )
             
             # Convert to DataFrame
             dept_df = pd.DataFrame(dept_data)
+
             
             # Create treemap based on view type
             if view_type == "Project Count":
@@ -139,58 +142,47 @@ def main():
             # Department Details Section
             st.header("Department Details")
             
-            # Get departments for selector
-            dept_options = dept_df['department'].tolist()
-            selected_dept = st.selectbox(
+            # Get departments from cache
+            dept_options = get_departments()
+            
+            # Format department options to show stats
+            dept_display_options = []
+            for dept in dept_options:
+                stats = get_department_stats(dept)
+                if stats:
+                    count = stats.get('count', 0)
+                    value = stats.get('total_value_millions', 0)
+                    dept_display_options.append(f"{dept} ({count:,} projects, ฿{value:.1f}M)")
+                else:
+                    dept_display_options.append(dept)
+            
+            # Create mapping from display string back to department name
+            dept_mapping = dict(zip(dept_display_options, dept_options))
+            
+            selected_display = st.selectbox(
                 "Select Department for Detailed Analysis",
-                options=sorted(dept_options)
+                options=dept_display_options
             )
             
-            if selected_dept:
-                # Get pre-aggregated subdepartment data
-                subdept_data = mongo_service.get_subdepartment_data(selected_dept)
-                subdept_df = pd.DataFrame(subdept_data)
+            if selected_display:
+                selected_dept = dept_mapping[selected_display]
+                dept_stats = get_department_stats(selected_dept)
                 
-                if not subdept_df.empty:
-                    # Display metrics using first department record
-                    dept_info = dept_df[dept_df['department'] == selected_dept].iloc[0]
-                    
+                if dept_stats:
+                    # Display department metrics
                     col1, col2, col3, col4 = st.columns(4)
                     with col1:
-                        st.metric("Total Projects", f"{dept_info['count']:,}")
+                        st.metric("Total Projects", f"{dept_stats['count']:,}")
                     with col2:
-                        st.metric("Total Value", f"฿{dept_info['total_value_millions']:.2f}M")
+                        st.metric("Total Value", f"฿{dept_stats['total_value_millions']:.2f}M")
                     with col3:
-                        st.metric("Market Share", f"{dept_info['value_percentage']:.1f}%")
+                        st.metric("Market Share", f"{dept_stats['value_percentage']:.1f}%")
                     with col4:
-                        st.metric("Unique Companies", f"{dept_info['unique_companies']:,}")
+                        st.metric("Unique Companies", f"{dept_stats['unique_companies']:,}")
                     
-                    # Create subdepartment visualization
-                    metric_choice = st.radio(
-                        "View by:",
-                        ["Project Count", "Total Value"],
-                        horizontal=True,
-                        key="subdept_metric"
-                    )
-
-                    if metric_choice == "Project Count":
-                        value_col = 'count'
-                        hover_data = {
-                            'subdepartment': '%{label}',
-                            'count': 'Projects: %{value:,}',
-                            'total_value_millions': 'Value: ฿%{customdata.total_value_millions:.1f}M',
-                            'unique_companies': 'Companies: %{customdata.unique_companies:,}'
-                        }
-                        custom_data = subdept_df[['total_value_millions', 'unique_companies']].to_dict('records')
-                    else:
-                        value_col = 'total_value_millions'
-                        hover_data = {
-                            'subdepartment': '%{label}',
-                            'total_value_millions': 'Value: ฿%{value:.1f}M',
-                            'count': 'Projects: %{customdata.count:,}',
-                            'unique_companies': 'Companies: %{customdata.unique_companies:,}'
-                        }
-                        custom_data = subdept_df[['count', 'unique_companies']].to_dict('records')
+                    # Get pre-aggregated subdepartment data with limit
+                    subdept_data = mongo_service.get_subdepartment_data(selected_dept, limit=30)
+                    subdept_df = pd.DataFrame(subdept_data)
 
                     # Create subdepartment treemap
                     subdept_fig = TreemapService.create_treemap(
