@@ -11,6 +11,8 @@ from services.analytics.insights_service import InsightsService
 from state.session import SessionState
 from services.cache.filter_cache import get_filtered_data
 
+st.set_page_config(layout="wide")
+
 def Analysis():
     """Analysis page with enhanced filter responsiveness and loading states"""
     # Initialize session state

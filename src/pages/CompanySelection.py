@@ -8,6 +8,8 @@ from components.tables.CompanyTable import CompanyTable
 from state.session import SessionState
 from services.cache.filter_cache import get_filtered_data
 
+st.set_page_config(layout="wide")
+
 def CompanySelection():
     """Company selection page with enhanced filter responsiveness"""
     # Initialize session state

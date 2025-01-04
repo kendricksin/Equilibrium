@@ -8,6 +8,8 @@ from components.layout.MetricsSummary import MetricsSummary
 from services.analytics.company_comparison import CompanyComparisonService
 from state.session import SessionState
 
+st.set_page_config(layout="wide")
+
 def CompanyComparison():
     """Company comparison page with price cut analysis"""
     # Initialize session state
