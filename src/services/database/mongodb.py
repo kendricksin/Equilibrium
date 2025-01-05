@@ -399,7 +399,73 @@ class MongoDBService:
         except Exception as e:
             logger.error(f"Error fetching projects: {e}")
             raise
-    
+
+    def search_companies(
+        self,
+        search_term: str,
+        limit: int = 10
+    ) -> List[Dict[str, Any]]:
+        """
+        Search companies by name
+        
+        Args:
+            search_term (str): Search term to match against company names
+            limit (int): Maximum number of results to return
+            
+        Returns:
+            List[Dict[str, Any]]: List of matching companies
+        """
+        try:
+            return list(
+                self.db.companies.find(
+                    {"winner": {"$regex": search_term, "$options": "i"}},
+                    {"winner": 1, "project_count": 1, "total_value": 1}
+                ).limit(limit)
+            )
+        except Exception as e:
+            self.logger.error(f"Error searching companies: {e}")
+            return []
+
+    def get_company_details(
+        self,
+        company_name: str
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Get detailed company information
+        
+        Args:
+            company_name (str): Exact company name
+            
+        Returns:
+            Optional[Dict[str, Any]]: Company details or None if not found
+        """
+        try:
+            return self.db.companies.find_one({"winner": company_name})
+        except Exception as e:
+            self.logger.error(f"Error getting company details: {e}")
+            return None
+
+    def get_company_comparison(
+        self,
+        company_names: List[str]
+    ) -> List[Dict[str, Any]]:
+        """
+        Get comparison data for multiple companies
+        
+        Args:
+            company_names (List[str]): List of company names to compare
+            
+        Returns:
+            List[Dict[str, Any]]: List of company details
+        """
+        try:
+            return list(
+                self.db.companies.find({"winner": {"$in": company_names}})
+            )
+        except Exception as e:
+            self.logger.error(f"Error getting company comparison: {e}")
+            return []
+
     def _get_documents_in_chunks(
         self,
         collection,
