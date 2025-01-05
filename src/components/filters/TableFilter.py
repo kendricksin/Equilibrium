@@ -16,12 +16,16 @@ class TableFilter:
         'date_column': 'transaction_date',
         'company_column': 'winner',
         'department_column': 'dept_name',
+        'subdepartment_column': 'dept_sub_name',
+        'project_type_column': 'project_type_name',
+        'procurement_method_column': 'purchase_method_name',
         'show_value_filter': True,
         'show_date_filter': True,
         'show_company_filter': True,
         'show_department_filter': True,
-        'expander_default': False,
-        'min_companies_for_search': 10  # Show search box if more companies than this
+        'show_type_filter': True,
+        'show_procurement_filter': True,
+        'expander_default': False
     }
     
     def __init__(
@@ -89,19 +93,6 @@ class TableFilter:
         
         col.markdown("**Company Filter**")
         
-        # Add search box for companies if there are many
-        if len(company_options) >= self.config['min_companies_for_search']:
-            search_term = col.text_input(
-                "Search companies",
-                key=f"{self.key_prefix}company_search"
-            ).lower()
-            
-            if search_term:
-                company_options = [
-                    opt for opt in company_options 
-                    if search_term in str(opt['name']).lower()
-                ]
-        
         # Create formatted options for display
         formatted_options = {
             f"{opt['name']} ({opt['count']} projects)": opt['name']
@@ -122,14 +113,16 @@ class TableFilter:
         
         return selected_companies
     
-    def _add_department_filter(self, col) -> Optional[List[str]]:
-        """Add department filter"""
+    def _add_department_filters(self, col) -> tuple[Optional[List[str]], Optional[List[str]]]:
+        """Add department and sub-department filters"""
         if not self.config['show_department_filter']:
-            return None
+            return None, None
             
         dept_col = self.config['department_column']
+        subdept_col = self.config['subdepartment_column']
+        
         if dept_col not in self.df.columns:
-            return None
+            return None, None
         
         # Get department counts and sort by frequency
         dept_counts = self.df[dept_col].value_counts()
@@ -138,7 +131,7 @@ class TableFilter:
             for dept, count in dept_counts.items()
         ]
         
-        col.markdown("**Department Filter**")
+        col.markdown("**Department Filters**")
         
         # Create formatted options for display
         formatted_options = {
@@ -146,7 +139,7 @@ class TableFilter:
             for opt in dept_options
         }
         
-        selected_labels = col.multiselect(
+        selected_dept_labels = col.multiselect(
             "Select Departments",
             options=list(formatted_options.keys()),
             key=f"{self.key_prefix}departments"
@@ -155,11 +148,118 @@ class TableFilter:
         # Convert selected labels back to department names
         selected_depts = [
             formatted_options[label]
+            for label in selected_dept_labels
+        ]
+        
+        # Sub-department filter (only if departments are selected)
+        selected_subdepts = []
+        # Get sub-departments for selected departments
+        subdept_df = self.df[self.df[dept_col].isin(selected_depts)]
+        subdept_counts = subdept_df[subdept_col].value_counts()
+        
+        subdept_options = [
+            {'name': subdept, 'count': count} 
+            for subdept, count in subdept_counts.items()
+            if pd.notna(subdept)  # Filter out NaN/None values
+        ]
+        
+        if subdept_options:
+            formatted_subdept_options = {
+                f"{opt['name']} ({opt['count']} projects)": opt['name']
+                for opt in subdept_options
+            }
+            
+            selected_subdept_labels = col.multiselect(
+                "Select Sub-departments",
+                options=list(formatted_subdept_options.keys()),
+                key=f"{self.key_prefix}subdepartments"
+            )
+            
+            selected_subdepts = [
+                formatted_subdept_options[label]
+                for label in selected_subdept_labels
+            ]
+        
+        return selected_depts, selected_subdepts
+    
+    def _add_project_type_filter(self, col) -> Optional[List[str]]:
+        """Add project type filter"""
+        if not self.config['show_type_filter']:
+            return None
+            
+        type_col = self.config['project_type_column']
+        if type_col not in self.df.columns:
+            return None
+        
+        # Get type counts and sort by frequency
+        type_counts = self.df[type_col].value_counts()
+        type_options = [
+            {'name': ptype, 'count': count} 
+            for ptype, count in type_counts.items()
+            if pd.notna(ptype)
+        ]
+        
+        col.markdown("**Project Type Filter**")
+        
+        # Create formatted options for display
+        formatted_options = {
+            f"{opt['name']} ({opt['count']} projects)": opt['name']
+            for opt in type_options
+        }
+        
+        selected_labels = col.multiselect(
+            "Select Project Types",
+            options=list(formatted_options.keys()),
+            key=f"{self.key_prefix}project_types"
+        )
+        
+        # Convert selected labels back to type names
+        selected_types = [
+            formatted_options[label]
             for label in selected_labels
         ]
         
-        return selected_depts
+        return selected_types
     
+    def _add_procurement_method_filter(self, col) -> Optional[List[str]]:
+        """Add procurement method filter"""
+        if not self.config['show_procurement_filter']:
+            return None
+            
+        method_col = self.config['procurement_method_column']
+        if method_col not in self.df.columns:
+            return None
+        
+        # Get method counts and sort by frequency
+        method_counts = self.df[method_col].value_counts()
+        method_options = [
+            {'name': method, 'count': count} 
+            for method, count in method_counts.items()
+            if pd.notna(method)
+        ]
+        
+        col.markdown("**Procurement Method Filter**")
+        
+        # Create formatted options for display
+        formatted_options = {
+            f"{opt['name']} ({opt['count']} projects)": opt['name']
+            for opt in method_options
+        }
+        
+        selected_labels = col.multiselect(
+            "Select Procurement Methods",
+            options=list(formatted_options.keys()),
+            key=f"{self.key_prefix}procurement_methods"
+        )
+        
+        # Convert selected labels back to method names
+        selected_methods = [
+            formatted_options[label]
+            for label in selected_labels
+        ]
+        
+        return selected_methods
+
     def _add_date_filter(self, col) -> Optional[tuple]:
         """Add date range filter"""
         if not self.config['show_date_filter']:
@@ -200,7 +300,9 @@ class TableFilter:
             filtered_df = self.df.copy()
             active_filters = []
             
-            # Add filters to columns
+            # Create three columns for better organization
+            col1, col2, col3 = st.columns(3)
+            
             with col1:
                 # Value range filter
                 value_range = self._add_value_filter(col1)
@@ -216,25 +318,48 @@ class TableFilter:
                             f"Value: {value_range[0]:.1f} - {value_range[1]:.1f} {self.config['value_label']}"
                         )
                 
-                # Company filter
-                selected_companies = self._add_company_filter(col1)
-                if selected_companies:
-                    filtered_df = filtered_df[
-                        filtered_df[self.config['company_column']].isin(selected_companies)
-                    ]
-                    active_filters.append(f"Companies: {len(selected_companies)} selected")
-            
-            with col2:
-                # Department filter
-                selected_depts = self._add_department_filter(col2)
+                # Department and sub-department filters
+                selected_depts, selected_subdepts = self._add_department_filters(col1)
                 if selected_depts:
                     filtered_df = filtered_df[
                         filtered_df[self.config['department_column']].isin(selected_depts)
                     ]
                     active_filters.append(f"Departments: {len(selected_depts)} selected")
                 
+                if selected_subdepts:
+                    filtered_df = filtered_df[
+                        filtered_df[self.config['subdepartment_column']].isin(selected_subdepts)
+                    ]
+                    active_filters.append(f"Sub-departments: {len(selected_subdepts)} selected")
+            
+            with col2:
+                # Project type filter
+                selected_types = self._add_project_type_filter(col2)
+                if selected_types:
+                    filtered_df = filtered_df[
+                        filtered_df[self.config['project_type_column']].isin(selected_types)
+                    ]
+                    active_filters.append(f"Project Types: {len(selected_types)} selected")
+                
+                # Procurement method filter
+                selected_methods = self._add_procurement_method_filter(col2)
+                if selected_methods:
+                    filtered_df = filtered_df[
+                        filtered_df[self.config['procurement_method_column']].isin(selected_methods)
+                    ]
+                    active_filters.append(f"Procurement Methods: {len(selected_methods)} selected")
+            
+            with col3:
+                # Company filter
+                selected_companies = self._add_company_filter(col3)
+                if selected_companies:
+                    filtered_df = filtered_df[
+                        filtered_df[self.config['company_column']].isin(selected_companies)
+                    ]
+                    active_filters.append(f"Companies: {len(selected_companies)} selected")
+                
                 # Date range filter
-                date_range = self._add_date_filter(col2)
+                date_range = self._add_date_filter(col3)
                 if date_range:
                     start_date, end_date = date_range
                     filtered_df = filtered_df[
@@ -246,24 +371,24 @@ class TableFilter:
                     if start_date != min_date or end_date != max_date:
                         active_filters.append(f"Date: {start_date} to {end_date}")
             
-        # Show filter summary and clear button
-        if len(filtered_df) != len(self.df):
-            col1, col2 = st.columns([3, 1])
-            
-            with col1:
-                st.markdown(f"**Filtered {len(filtered_df):,} out of {len(self.df):,} projects**")
-                if active_filters:
-                    st.markdown("**Active Filters:** " + " | ".join(active_filters))
-            
-            with col2:
-                if st.button("🔄 Clear Secondary Filters", 
-                            key=f"{self.key_prefix}clear_filters",
-                            use_container_width=True):
-                    # Reset all session state keys used by this filter instance
-                    for key in st.session_state:
-                        if key.startswith(self.key_prefix):
-                            del st.session_state[key]
-                    st.rerun()
+            # Show filter summary and clear button
+            if len(filtered_df) != len(self.df):
+                col1, col2 = st.columns([3, 1])
+                
+                with col1:
+                    st.markdown(f"**Filtered {len(filtered_df):,} out of {len(self.df):,} projects**")
+                    if active_filters:
+                        st.markdown("**Active Filters:** " + " | ".join(active_filters))
+                
+                with col2:
+                    if st.button("🔄 Clear Filters", 
+                               key=f"{self.key_prefix}clear_filters",
+                               use_container_width=True):
+                        # Reset all session state keys used by this filter instance
+                        for key in st.session_state:
+                            if key.startswith(self.key_prefix):
+                                del st.session_state[key]
+                        st.rerun()
         
         return filtered_df
 
