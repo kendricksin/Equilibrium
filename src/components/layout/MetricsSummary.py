@@ -34,9 +34,12 @@ def create_distribution_bar(data: pd.Series, title: str) -> go.Figure:
     # Sort by percentage
     percentages = percentages.sort_values(ascending=True)
     
-    # Create colors gradient from light to dark blue
-    n_colors = len(percentages)
-    colors = [f'rgb(255, {int(230-i*30)}, {int(230-i*30)})' for i in range(n_colors)]
+    # Calculate color gradient - using a safer approach
+    n_items = len(data)
+    colors = [
+        f'rgba(255, 50, 50, {0.05 + ((i)/n_items)*0.95})'  # Blue with varying opacity
+        for i in range(n_items)
+    ]
     
     # Create the figure
     fig = go.Figure()
