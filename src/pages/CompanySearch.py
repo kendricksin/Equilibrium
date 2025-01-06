@@ -5,7 +5,6 @@ import pandas as pd
 import plotly.graph_objects as go
 from datetime import datetime
 import logging
-from components.layout.Header import Header
 from services.database.mongodb import MongoDBService
 
 # Configure logging
@@ -16,7 +15,6 @@ def CompanySearch():
     
     # Page config
     st.set_page_config(layout="wide")
-    Header(current_page="Company Search")
     
     # Initialize MongoDB service
     mongo = MongoDBService()

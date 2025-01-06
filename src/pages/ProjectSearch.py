@@ -3,8 +3,6 @@
 import streamlit as st
 import pandas as pd
 from datetime import datetime
-from components.layout.Header import Header
-from components.layout.Sidebar import Sidebar
 from components.layout.MetricsSummary import MetricsSummary
 from components.filters.KeywordFilter import KeywordFilter, build_keyword_query
 from components.filters.TableFilter import filter_projects
