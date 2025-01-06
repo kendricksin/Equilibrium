@@ -7,7 +7,6 @@ from services.database.mongodb import MongoDBService
 from services.analytics.treemap_serivce import TreemapService
 from services.cache.department_cache import get_departments, get_department_stats
 from state.session import SessionState
-from components.layout.Sidebar import Sidebar
 import logging
 
 st.set_page_config(layout="wide")
@@ -51,13 +50,6 @@ def main():
         
         # Initialize session state
         SessionState.initialize_state()
-        
-        # Add sidebar with filter handling
-        filters = Sidebar(
-            filters=SessionState.get_filters(),
-            selected_companies=SessionState.get_selected_companies(),
-            on_filter_change=handle_filter_change
-        )
         
         try:
             # Get metadata
