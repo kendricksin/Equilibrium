@@ -62,7 +62,7 @@ class TableFilter:
             return None
             
         min_value = float(self.df[value_col].min()) / self.config['value_unit']
-        max_value = float(self.df[value_col].max()) / self.config['value_unit']
+        max_value = float(self.df[value_col].max()) / self.config['value_unit']+0.01
         
         col.markdown(f"**Value Range ({self.config['value_label']})**")
         value_range = col.slider(
