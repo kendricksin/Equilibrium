@@ -33,100 +33,131 @@ def get_company_quarterly_trends(projects_df: pd.DataFrame, company_names: List[
     
     return quarterly_data
 
-def get_department_distribution(projects_df: pd.DataFrame, company_names: List[str]) -> List[Dict[str, Any]]:
-    """Calculate department distribution for companies"""
-    dept_data = []
-    
-    # Calculate total projects per company for percentage calculation
-    company_totals = {
-        company: len(projects_df[projects_df['winner'] == company])
-        for company in company_names
-    }
-    
-    # Get all unique departments
-    departments = sorted(projects_df['dept_name'].unique())
-    
-    for dept in departments:
-        dept_info = {'department': dept}
+def calculate_competitive_metrics(df: pd.DataFrame, companies: List[str]) -> Dict[str, Any]:
+    """Calculate competitive analysis metrics between companies"""
+    try:
+        company1, company2 = companies
         
-        for company in company_names:
-            dept_count = len(projects_df[
-                (projects_df['dept_name'] == dept) & 
-                (projects_df['winner'] == company)
-            ])
-            # Calculate percentage
-            if company_totals[company] > 0:
-                dept_info[company] = (dept_count / company_totals[company]) * 100
-            else:
-                dept_info[company] = 0
-            
-        dept_data.append(dept_info)
-    
-    return dept_data
-
-def get_procurement_distribution(projects_df: pd.DataFrame, company_names: List[str]) -> List[Dict[str, Any]]:
-    """Calculate procurement method distribution for companies"""
-    proc_data = []
-    
-    # Calculate total projects per company
-    company_totals = {
-        company: len(projects_df[projects_df['winner'] == company])
-        for company in company_names
-    }
-    
-    # Get all unique procurement methods
-    methods = sorted(projects_df['purchase_method_name'].unique())
-    
-    for method in methods:
-        method_info = {'method': method}
+        # Get departments for each company
+        depts1 = set(df[df['winner'] == company1]['dept_name'].unique())
+        depts2 = set(df[df['winner'] == company2]['dept_name'].unique())
+        shared_depts = depts1.intersection(depts2)
         
-        for company in company_names:
-            method_count = len(projects_df[
-                (projects_df['purchase_method_name'] == method) & 
-                (projects_df['winner'] == company)
-            ])
-            # Calculate percentage
-            if company_totals[company] > 0:
-                method_info[company] = (method_count / company_totals[company]) * 100
-            else:
-                method_info[company] = 0
-            
-        proc_data.append(method_info)
-    
-    return proc_data
+        # Get projects in shared departments
+        shared_dept_projects = df[df['dept_name'].isin(shared_depts)]
+        competitions = shared_dept_projects[shared_dept_projects['winner'].isin(companies)]
+        
+        # Calculate win rates
+        wins = competitions['winner'].value_counts()
+        win_rates = (wins / len(competitions) * 100).to_dict()
+        
+        # Calculate price cuts
+        def get_price_cut(company_df):
+            return ((company_df['sum_price_agree'].sum() / company_df['price_build'].sum()) - 1) * 100
+        
+        price_cuts = {
+            company: get_price_cut(df[df['winner'] == company])
+            for company in companies
+        }
+        
+        # Calculate project overlap percentage
+        total_projects = len(df[df['winner'].isin(companies)])
+        overlap_percentage = (len(competitions) / total_projects * 100)
+        
+        return {
+            'shared_departments': len(shared_depts),
+            'total_departments': {
+                company1: len(depts1),
+                company2: len(depts2)
+            },
+            'total_competitions': len(competitions),
+            'win_rates': win_rates,
+            'price_cuts': price_cuts,
+            'price_competition': abs(price_cuts[company1] - price_cuts[company2]),
+            'overlap_percentage': overlap_percentage
+        }
+        
+    except Exception as e:
+        logger.error(f"Error calculating competitive metrics: {e}")
+        return {}
 
-def create_distribution_chart(data: List[Dict[str, Any]], companies: List[str], title: str) -> go.Figure:
-    """Create a horizontal stacked bar chart for distribution comparison"""
-    fig = go.Figure()
+def display_competitive_analysis(metrics: Dict[str, Any], company1: str, company2: str):
+    """Display competitive analysis metrics in Streamlit"""
+    st.markdown("### 🤝 Competitive Analysis")
     
-    # Colors for companies
-    colors = ['rgb(31, 119, 180)', 'rgb(255, 127, 14)']
+    # Create three columns for key metrics
+    col1, col2, col3 = st.columns(3)
     
-    for i, company in enumerate(companies):
-        fig.add_trace(go.Bar(
-            y=[item['department' if 'department' in item else 'method'] for item in data],
-            x=[item[company] for item in data],
-            name=company,
-            orientation='h',
-            marker_color=colors[i],
-        ))
-    
-    fig.update_layout(
-        title=title,
-        barmode='group',
-        yaxis={'categoryorder': 'total ascending'},
-        height=max(400, len(data) * 30),  # Dynamic height based on number of items
-        margin=dict(l=20, r=20, t=40, b=20),
-        xaxis_title="Percentage of Projects (%)",
-        legend=dict(
-            yanchor="top",
-            y=0.99,
-            xanchor="right",
-            x=0.99
+    with col1:
+        st.metric(
+            "Shared Departments",
+            f"{metrics['shared_departments']} depts",
+            f"{metrics['overlap_percentage']:.1f}% overlap"
         )
-    )
     
-    return fig
+    with col2:
+        st.metric(
+            "Head-to-Head Projects",
+            f"{metrics['total_competitions']} projects",
+            f"{metrics['win_rates'].get(company1, 0):.1f}% win rate"
+        )
+    
+    with col3:
+        price_diff = metrics['price_competition']
+        better_pricer = company1 if metrics['price_cuts'][company1] < metrics['price_cuts'][company2] else company2
+        st.metric(
+            "Price Competition",
+            f"{abs(price_diff):.1f}% diff",
+            f"{better_pricer} more competitive"
+        )
+    
+    # Create win rate visualization
+    st.markdown("#### Win Rates in Shared Departments")
+    
+    # Use streamlit progress bars for win rates
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.markdown(f"**{company1}**")
+        st.progress(metrics['win_rates'].get(company1, 0) / 100)
+        st.caption(f"{metrics['win_rates'].get(company1, 0):.1f}%")
+    
+    with col2:
+        st.markdown(f"**{company2}**")
+        st.progress(metrics['win_rates'].get(company2, 0) / 100)
+        st.caption(f"{metrics['win_rates'].get(company2, 0):.1f}%")
+
+def display_comparative_analysis(df: pd.DataFrame, selected_companies: List[str]):
+    """Display comparative analysis using compact distribution bars"""
+    st.markdown("### 📈 Comparative Analysis")
+    
+    from components.layout.MetricsSummary import create_distribution_bar
+    
+    # Department Distribution section
+    st.markdown("#### Department Distribution")
+    for company in selected_companies:
+        company_df = df[df['winner'] == company]
+        dept_counts = company_df['dept_name'].value_counts()
+        fig = create_distribution_bar(dept_counts, company)
+        st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
+        
+        # Show top departments as caption
+        top_depts = dept_counts.head(3)
+        dept_text = ", ".join(f"{dept} ({count} projects)" for dept, count in top_depts.items())
+        st.caption(f"Top departments: {dept_text}")
+    
+    # Procurement Methods section
+    st.markdown("#### Procurement Methods")
+    for company in selected_companies:
+        company_df = df[df['winner'] == company]
+        method_counts = company_df['purchase_method_name'].value_counts()
+        fig = create_distribution_bar(method_counts, company)
+        st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
+        
+        # Show top methods as caption
+        top_method = method_counts.index[0]
+        method_share = method_counts.iloc[0] / len(company_df) * 100
+        st.caption(f"Primary method: {top_method} ({method_share:.1f}%)")
 
 def create_trend_chart(data: List[Dict[str, Any]], companies: List[str]) -> go.Figure:
     """Create a line chart for quarterly trends"""
@@ -182,9 +213,82 @@ def get_all_companies():
         logger.error(f"Error retrieving companies: {e}")
         return []
 
+def display_detailed_analysis(df: pd.DataFrame, selected_companies: List[str]):
+    """Display detailed analysis with horizontal layout and stacked comparisons"""
+    st.markdown("### 🔍 Detailed Analysis")
+    
+    # Project Size Distribution with both companies on same plot
+    fig = go.Figure()
+    colors = ['rgb(31, 119, 180)', 'rgb(255, 127, 14)']
+    
+    for i, company in enumerate(selected_companies):
+        company_df = df[df['winner'] == company]
+        values = company_df['sum_price_agree'] / 1e6
+        
+        fig.add_trace(go.Box(
+            x=values,  # Changed to x for horizontal orientation
+            name=company,
+            boxpoints='all',
+            jitter=0.3,
+            pointpos=-1.8,
+            orientation='h',  # Make boxes horizontal
+            marker_color=colors[i],
+            boxmean=True  # Show mean line
+        ))
+
+    fig.update_layout(
+        title="Project Value Distribution Comparison",
+        height=400,
+        xaxis_title="Project Value (Million ฿)",
+        showlegend=True,
+        legend=dict(
+            yanchor="top",
+            y=0.99,
+            xanchor="right",
+            x=0.99
+        ),
+        yaxis=dict(
+            showgrid=False,
+            zeroline=False
+        ),
+        xaxis=dict(
+            showgrid=True,
+            gridwidth=1,
+            gridcolor='lightgray',
+            zeroline=True,
+            zerolinecolor='lightgray'
+        ),
+        plot_bgcolor='white'
+    )
+    st.plotly_chart(fig, use_container_width=True)
+
+    # Add summary statistics below
+    summary_data = []
+    for company in selected_companies:
+        company_df = df[df['winner'] == company]
+        values = company_df['sum_price_agree'] / 1e6
+        summary_data.append({
+            'Company': company,
+            'Median': f"฿{values.median():.1f}M",
+            'Average': f"฿{values.mean():.1f}M",
+            'Min-Max': f"฿{values.min():.1f}M - ฿{values.max():.1f}M",
+            'Projects': f"{len(values):,}"
+        })
+    
+    # Display summary as a table
+    st.markdown("**Project Value Statistics**")
+    st.table(pd.DataFrame(summary_data).set_index('Company'))
+
 def CompanySearch():
     """Enhanced company search and comparison page"""
     st.set_page_config(layout="wide")
+
+    # Initialize session state
+    if "initialized" not in st.session_state:
+        st.session_state.initialized = True
+        st.session_state.default_company = None
+        st.session_state.company1 = None
+        st.session_state.company2 = None
     
     # Initialize MongoDB service
     mongo = MongoDBService()
@@ -198,14 +302,25 @@ def CompanySearch():
             st.error("Unable to retrieve company data. Please try again later.")
             return
         
-        # Create company options
+        # Create company options with random default selection
+        import random
         company_options = [""]
         company_map = {}
-        for company in companies:
+        
+        # Filter out companies with very few projects (e.g., less than 5)
+        valid_companies = [c for c in companies if len(c.get('project_ids', [])) >= 5]
+        
+        for company in valid_companies:
             actual_count = len(company.get('project_ids', []))
             option_text = f"{company['winner']} ({actual_count} projects)"
             company_options.append(option_text)
             company_map[option_text] = company['winner']
+        
+        # Get default selection if not already in session state
+        if 'default_company' not in st.session_state:
+            # Randomly select a company with at least 5 projects
+            default_company = random.choice(company_options[1000:2000])  # Skip empty option
+            st.session_state.default_company = default_company
         
         # Search section
         st.markdown("### 🔍 Company Search")
@@ -284,116 +399,42 @@ def CompanySearch():
                         }
                     ))
                     
-                    if projects:
-                        df = pd.DataFrame(projects)
+                if projects:
+                    df = pd.DataFrame(projects)
+                    
+                    # Display distributions using compact bars
+                    display_comparative_analysis(df, selected_companies)
+
+                    # Calculate competitive metrics
+                    competitive_metrics = calculate_competitive_metrics(df, selected_companies)
+                    
+                    # Display competitive analysis
+                    display_competitive_analysis(competitive_metrics, *selected_companies)
                         
-                        # Create visualizations
-                        st.markdown("### 📈 Comparative Analysis")
                         
-                        # Department Distribution
-                        dept_data = get_department_distribution(df, selected_companies)
-                        dept_chart = create_distribution_chart(
-                            dept_data, 
-                            selected_companies, 
-                            "Department Distribution"
+                    # Display detailed analysis
+                    display_detailed_analysis(df, selected_companies)
+                    
+                    # Projects Table
+                    st.markdown("### 📋 Project Details")
+                    from components.tables.ProjectsTable import ProjectsTable
+                    ProjectsTable(
+                        df=df,
+                        show_search=True,
+                        key_prefix="company_comparison_"
+                    )
+                    
+                    # Export functionality
+                    col1, col2, col3 = st.columns([2,2,1])
+                    with col1:
+                        csv = df.to_csv(index=False)
+                        st.download_button(
+                            "📥 Download Project Details",
+                            csv,
+                            "company_projects_comparison.csv",
+                            "text/csv",
+                            key='download-projects'
                         )
-                        st.plotly_chart(dept_chart, use_container_width=True)
-                        
-                        # Procurement Methods
-                        proc_data = get_procurement_distribution(df, selected_companies)
-                        proc_chart = create_distribution_chart(
-                            proc_data, 
-                            selected_companies, 
-                            "Procurement Methods"
-                        )
-                        st.plotly_chart(proc_chart, use_container_width=True)
-                        # Quarterly Trends
-                        quarterly_data = get_quarterly_trends(df, selected_companies)
-                        trend_chart = create_trend_chart(quarterly_data, selected_companies)
-                        st.plotly_chart(trend_chart, use_container_width=True)
-                        
-                        # Additional Analysis Section
-                        st.markdown("### 🔍 Detailed Analysis")
-                        
-                        # Project Size Distribution
-                        col1, col2 = st.columns(2)
-                        
-                        with col1:
-                            st.markdown("#### Project Size Distribution")
-                            for company in selected_companies:
-                                company_df = df[df['winner'] == company]
-                                fig = go.Figure()
-                                fig.add_trace(go.Box(
-                                    y=company_df['sum_price_agree'] / 1e6,
-                                    name=company,
-                                    boxpoints='all',
-                                    jitter=0.3,
-                                    pointpos=-1.8
-                                ))
-                                fig.update_layout(
-                                    title=f"{company} Project Values",
-                                    yaxis_title="Project Value (Million ฿)",
-                                    showlegend=False,
-                                    height=300
-                                )
-                                st.plotly_chart(fig, use_container_width=True)
-                        
-                        with col2:
-                            st.markdown("#### Price Cut Analysis")
-                            for company in selected_companies:
-                                company_df = df[df['winner'] == company]
-                                company_df['price_cut'] = ((company_df['sum_price_agree'] / company_df['price_build']) - 1) * 100
-                                fig = go.Figure()
-                                fig.add_trace(go.Histogram(
-                                    x=company_df['price_cut'],
-                                    name=company,
-                                    nbinsx=20
-                                ))
-                                fig.update_layout(
-                                    title=f"{company} Price Cuts",
-                                    xaxis_title="Price Cut (%)",
-                                    yaxis_title="Number of Projects",
-                                    showlegend=False,
-                                    height=300
-                                )
-                                st.plotly_chart(fig, use_container_width=True)
-                        
-                        # Projects Table
-                        st.markdown("### 📋 Project Details")
-                        from components.tables.ProjectsTable import ProjectsTable
-                        ProjectsTable(
-                            df=df,
-                            show_search=True,
-                            key_prefix="company_comparison_"
-                        )
-                        
-                        # Export functionality
-                        col1, col2, col3 = st.columns([2,2,1])
-                        with col1:
-                            csv = df.to_csv(index=False)
-                            st.download_button(
-                                "📥 Download Project Details",
-                                csv,
-                                "company_projects_comparison.csv",
-                                "text/csv",
-                                key='download-projects'
-                            )
-                        
-                        # Export analysis data
-                        with col2:
-                            analysis_data = {
-                                'quarterly_trends': quarterly_data,
-                                'department_distribution': dept_data,
-                                'procurement_distribution': proc_data
-                            }
-                            analysis_df = pd.DataFrame(analysis_data)
-                            st.download_button(
-                                "📥 Download Analysis Data",
-                                analysis_df.to_csv(index=False),
-                                "company_analysis_data.csv",
-                                "text/csv",
-                                key='download-analysis'
-                            )
                             
     except Exception as e:
         logger.error(f"Error in CompanySearch: {e}")
