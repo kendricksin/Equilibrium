@@ -3,6 +3,8 @@
 import streamlit as st
 import pandas as pd
 from typing import Dict, Optional, Any
+from components.layout.SaveCollection import SaveCollection
+
 
 def ProjectsTable(
     df: pd.DataFrame,
@@ -121,3 +123,10 @@ def ProjectsTable(
     )
     
     st.markdown(f"Showing {len(display_df)} projects")
+
+    # Add Save Collection component
+    SaveCollection(
+        df=display_df,
+        source="project_search",
+        key_prefix=f"{key_prefix}table_"
+    )

@@ -5,6 +5,8 @@ import logging
 from services.database.mongodb import MongoDBService
 from typing import List, Dict, Any, Optional
 import plotly.graph_objects as go
+from components.tables.ProjectsTable import ProjectsTable
+
 
 logger = logging.getLogger(__name__)
 
@@ -417,7 +419,6 @@ def CompanySearch():
                     
                     # Projects Table
                     st.markdown("### 📋 Project Details")
-                    from components.tables.ProjectsTable import ProjectsTable
                     ProjectsTable(
                         df=df,
                         show_search=True,
