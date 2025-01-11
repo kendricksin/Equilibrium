@@ -9,6 +9,7 @@ from services.database.collections import (
     get_collection_df,
     delete_collection
 )
+from components.layout.PageLayout import PageLayout
 
 def display_collection_card(collection: Dict[str, Any], on_add_to_context):
     """Display a collection as a card with actions"""
@@ -62,7 +63,6 @@ def display_collection_card(collection: Dict[str, Any], on_add_to_context):
 
 def ContextManager():
     """Context Manager page for managing saved collections and context"""
-    st.set_page_config(layout="wide")
     
     # Initialize session state for context if not exists
     if 'context_collections' not in st.session_state:
@@ -165,4 +165,4 @@ def ContextManager():
         st.info("No collections found. Save some data from the analysis pages to get started!")
 
 if __name__ == "__main__":
-    ContextManager()
+    PageLayout(ContextManager)

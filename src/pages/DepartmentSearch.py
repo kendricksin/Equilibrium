@@ -13,8 +13,7 @@ from services.cache.department_cache import (
     get_department_stats,
     get_subdepartment_stats
 )
-
-st.set_page_config(layout="wide")
+from components.layout.PageLayout import PageLayout
 
 def DepartmentSearch():
     """Department search page with multi-department selection and secondary filtering"""
@@ -233,4 +232,4 @@ def DepartmentSearch():
         st.info("Select one or more departments above and click Search to find projects.")
 
 if __name__ == "__main__":
-    DepartmentSearch()
+    PageLayout(DepartmentSearch)

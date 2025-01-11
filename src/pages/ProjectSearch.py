@@ -9,8 +9,8 @@ from components.filters.TableFilter import filter_projects
 from components.tables.ProjectsTable import ProjectsTable
 from state.session import SessionState
 from services.database.mongodb import MongoDBService
+from components.layout.PageLayout import PageLayout
 
-st.set_page_config(layout="wide")
 
 def ProjectSearch():
     """Project search page with keyword filtering and secondary filtering"""
@@ -179,4 +179,4 @@ def ProjectSearch():
         st.info("Enter keywords above and click Search to find projects.")
 
 if __name__ == "__main__":
-    ProjectSearch()
+    PageLayout(ProjectSearch)

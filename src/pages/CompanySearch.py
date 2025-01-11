@@ -6,6 +6,7 @@ from services.database.mongodb import MongoDBService
 from typing import List, Dict, Any, Optional
 import plotly.graph_objects as go
 from components.tables.ProjectsTable import ProjectsTable
+from components.layout.PageLayout import PageLayout
 
 
 logger = logging.getLogger(__name__)
@@ -283,7 +284,6 @@ def display_detailed_analysis(df: pd.DataFrame, selected_companies: List[str]):
 
 def CompanySearch():
     """Enhanced company search and comparison page"""
-    st.set_page_config(layout="wide")
 
     # Initialize session state
     if "initialized" not in st.session_state:
@@ -494,4 +494,4 @@ def get_company_data(company_name: str, mongo_service: MongoDBService) -> Option
         return None
 
 if __name__ == "__main__":
-    CompanySearch()
+    PageLayout(CompanySearch)

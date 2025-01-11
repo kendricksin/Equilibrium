@@ -6,8 +6,7 @@ import plotly.graph_objects as go
 from components.layout.MetricsSummary import MetricsSummary
 from state.session import SessionState
 from special_functions.context_util import get_analysis_data, show_context_info
-
-st.set_page_config(layout="wide")
+from components.layout.PageLayout import PageLayout
 
 def StackedCompany():
     SessionState.initialize_state()
@@ -194,4 +193,4 @@ def StackedCompany():
         st.warning("No projects found. Please adjust your filters or add collections to the context.")
 
 if __name__ == "__main__":
-    StackedCompany()
+    PageLayout(StackedCompany)

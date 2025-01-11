@@ -1,0 +1,8 @@
+[server]
+headless = false
+
+[browser]
+gatherUsageStats = false
+
+[client]
+showSidebarNavigation = false
