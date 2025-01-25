@@ -14,16 +14,18 @@ from services.cache.department_cache import (
     get_subdepartment_stats
 )
 from components.layout.PageLayout import PageLayout
+from special_functions.url_params import URLParamsHandler
 
 def DepartmentSearch():
-    """Department search page with multi-department selection and secondary filtering"""
+    """Department search page with URL parameter support"""
     # Initialize session state
     SessionState.initialize_state()
     
-    # Initialize MongoDB service
+    # Initialize MongoDB service and URL parameters handler
     mongo_service = MongoDBService()
+    url_params = URLParamsHandler.get_query_params()
     
-    # Get current filters from session state
+    # Get current filters from session state or URL parameters
     filters = SessionState.get_filters()
     
     # Department selection section
@@ -32,9 +34,10 @@ def DepartmentSearch():
     # Get departments with cached statistics
     dept_options = get_departments()
     
-    # Format department options to show stats
+    # Format department options and create mapping
     dept_display_options = []
-    dept_mapping = {}  # To map display strings back to department names
+    dept_mapping = {}
+    reverse_dept_mapping = {}
     
     for dept in dept_options:
         stats = get_department_stats(dept)
@@ -42,11 +45,22 @@ def DepartmentSearch():
             display_text = f"{dept} ({stats['count']:,} projects, ฿{stats['total_value_millions']:.1f}M)"
             dept_display_options.append(display_text)
             dept_mapping[display_text] = dept
+            reverse_dept_mapping[dept] = display_text
+    
+    # Pre-select departments from URL parameters
+    default_depts = []
+    if 'departments' in url_params:
+        default_depts = [
+            reverse_dept_mapping[dept]
+            for dept in url_params['departments']
+            if dept in reverse_dept_mapping
+        ]
     
     # Multi-select for departments with statistics
     selected_display_depts = st.multiselect(
         "Select Departments",
         options=dept_display_options,
+        default=default_depts,
         key="department_select",
         help="Select one or more departments to analyze"
     )
@@ -54,35 +68,52 @@ def DepartmentSearch():
     # Convert display selections back to department names
     selected_departments = [dept_mapping[display] for display in selected_display_depts]
     
-    # Sub-department selection (only show if departments are selected)
+    # Sub-department selection
     selected_subdepartments = []
     if selected_departments:
-        # Get sub-department stats for all selected departments
+        # Get sub-department stats and create mapping
         all_subdept_stats = {}
+        subdept_display_options = []
+        subdept_mapping = {}
+        reverse_subdept_mapping = {}
+        
         for dept in selected_departments:
             subdept_stats = get_subdepartment_stats(dept)
             all_subdept_stats.update(subdept_stats)
         
-        # Create formatted sub-department options
-        subdept_display_options = []
-        subdept_mapping = {}
-        
         for subdept, stats in all_subdept_stats.items():
-            if pd.notna(subdept):  # Filter out NaN/None values
+            if pd.notna(subdept):
                 display_text = f"{subdept} ({stats['count']:,} projects, ฿{stats['total_value_millions']:.1f}M)"
                 subdept_display_options.append(display_text)
                 subdept_mapping[display_text] = subdept
+                reverse_subdept_mapping[subdept] = display_text
+        
+        # Pre-select subdepartments from URL parameters
+        default_subdepts = []
+        if 'subdepartments' in url_params:
+            default_subdepts = [
+                reverse_subdept_mapping[subdept]
+                for subdept in url_params['subdepartments']
+                if subdept in reverse_subdept_mapping
+            ]
         
         # Multi-select for sub-departments
         selected_display_subdepts = st.multiselect(
             "Select Sub-departments (Optional)",
             options=sorted(subdept_display_options),
+            default=default_subdepts,
             key="subdepartment_select",
             help="Optionally select specific sub-departments to narrow your search"
         )
         
-        # Convert display selections back to sub-department names
         selected_subdepartments = [subdept_mapping[display] for display in selected_display_subdepts]
+    
+    # Update URL parameters based on selections
+    url_params = {
+        'departments': selected_departments,
+        'subdepartments': selected_subdepartments
+    }
+    URLParamsHandler.update_query_params(url_params)
     
     # Search and Clear buttons
     col1, col2 = st.columns([1, 5])
@@ -96,13 +127,14 @@ def DepartmentSearch():
     
     with col2:
         if st.button("❌ Clear Selection", use_container_width=True):
-            # Clear selections from session state
+            # Clear selections and URL parameters
             if "department_select" in st.session_state:
                 del st.session_state.department_select
             if "subdepartment_select" in st.session_state:
                 del st.session_state.subdepartment_select
             st.session_state.department_results = None
             st.session_state.filtered_results = None
+            URLParamsHandler.update_query_params({})
             st.rerun()
     
     # Process search
@@ -230,6 +262,17 @@ def DepartmentSearch():
             )
     else:
         st.info("Select one or more departments above and click Search to find projects.")
+
+    # Add share button
+    if selected_departments:
+        shareable_url = URLParamsHandler.get_shareable_link()
+        st.markdown("#### 🔗 Share this view")
+        st.code(shareable_url)
+        
+        # Copy button
+        if st.button("📋 Copy URL"):
+            st.write("URL copied to clipboard!")
+            st.experimental_set_clipboard(shareable_url)
 
 if __name__ == "__main__":
     PageLayout(DepartmentSearch)
