@@ -27,41 +27,25 @@ def create_heatmap(df: pd.DataFrame, metric: str):
         for j, company in enumerate(top_companies):
             company_projects = df[
                 (df['winner'] == company) & 
-                (df['sum_price_agree']/1e6 >= band['min']) & 
-                (df['sum_price_agree']/1e6 < band['max'])
+                (df['sum_price_agree'] >= band['min']) &
+                (df['sum_price_agree'] < band['max'])
             ]
             
             if metric == 'Project Count':
                 value = len(company_projects)
                 cell_text = f"{value:,.0f}"
-                hover_text = f"{value:,.0f} projects"
             elif metric == 'Total Value':
-                value = company_projects['sum_price_agree'].sum()  # Remove /1e6 here since it's already divided when filtering
+                value = company_projects['sum_price_agree'].sum()  # Already in millions
                 cell_text = f"{value:,.0f}MB"
-                hover_text = f"{value:,.0f}MB"
             else:  # Price Cut %
                 value = ((company_projects['price_build'] - company_projects['sum_price_agree']) / 
                         company_projects['price_build']).mean() * 100 if not company_projects.empty else 0
                 cell_text = f"{value:.1f}%"
-                hover_text = f"{value:.1f}%"
                 
             row.append(value)
-            
-            annotations.append(dict(
-                x=j,
-                y=i,
-                text=cell_text,
-                showarrow=False,
-                font=dict(size=10)
-            ))
+            annotations.append(dict(x=j, y=i, text=cell_text, showarrow=False, font=dict(size=10)))
         data.append(row)
     
-    color_scales = {
-        'Project Count': 'Blues',
-        'Total Value': 'Greens',
-        'Price Cut %': 'Reds'
-    }
-
     hover_templates = {
         'Project Count': "Company: %{x}<br>Band: %{y}<br>Count: %{z:,.0f} projects<extra></extra>",
         'Total Value': "Company: %{x}<br>Band: %{y}<br>Value: %{z:,.0f}MB<extra></extra>",
@@ -72,7 +56,7 @@ def create_heatmap(df: pd.DataFrame, metric: str):
         z=data,
         x=top_companies,
         y=[band['name'] for band in value_bands],
-        colorscale=color_scales[metric],
+        colorscale='Blues' if metric == 'Project Count' else 'Greens' if metric == 'Total Value' else 'Reds',
         showscale=True,
         hoverongaps=False,
         hovertemplate=hover_templates[metric]
