@@ -7,6 +7,7 @@ from components.filters.TableFilter import filter_projects
 from components.layout.MetricsSummary import MetricsSummary
 from components.tables.ProjectsTable import ProjectsTable
 from state.session import SessionState
+import plotly.graph_objects as go
 
 logger = logging.getLogger(__name__)
 
@@ -175,6 +176,70 @@ def CompanySearch():
                     st.markdown(f"**{method}**  \n"
                               f"{count:,} projects ({percentage:.1f}%)")
         
+        st.markdown("---")
+
+        # Add this after the "Quick Statistics" section and before ProjectsTable
+
+        # Value Distribution Analysis
+        st.markdown("### 📊 Project Value Distribution")
+        st.markdown("Compare the range of project values for each company")
+
+        fig = go.Figure()
+        for company in selected_companies:
+            company_data = display_df[display_df['winner'] == company]
+            values = company_data['sum_price_agree'] / 1e6  # Convert to millions
+            
+            fig.add_trace(go.Box(
+                x=values,
+                name=company,
+                orientation='h',
+                boxpoints='outliers',
+                boxmean=True,  # Show mean as a dashed line
+                marker_size=4,
+                line_width=1
+            ))
+
+        fig.update_layout(
+            title="Project Value Distribution by Company",
+            xaxis_title="Project Value (Million ฿)",
+            yaxis_title="Company",
+            height=100 + (len(selected_companies) * 50),  # Dynamic height based on number of companies
+            showlegend=False,
+            margin=dict(l=20, r=20, t=40, b=20),
+            yaxis={'categoryorder': 'trace'},  # Keep original order
+            xaxis={'zeroline': False}
+        )
+
+        st.plotly_chart(fig, use_container_width=True)
+
+        # Optional statistics
+        with st.expander("📈 View Distribution Statistics"):
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.markdown("**Value Statistics (Million ฿)**")
+                stats_df = display_df.groupby('winner')['sum_price_agree'].agg([
+                    ('Minimum', 'min'),
+                    ('Maximum', 'max'),
+                    ('Mean', 'mean'),
+                    ('Median', 'median')
+                ]) / 1e6  # Convert to millions
+                
+                # Format decimals
+                stats_df = stats_df.round(2)
+                st.dataframe(stats_df)
+            
+            with col2:
+                st.markdown("**Value Ranges**")
+                for company in selected_companies:
+                    company_data = display_df[display_df['winner'] == company]
+                    q1 = company_data['sum_price_agree'].quantile(0.25) / 1e6
+                    q3 = company_data['sum_price_agree'].quantile(0.75) / 1e6
+                    iqr = q3 - q1
+                    st.markdown(f"**{company}**  \n"
+                            f"Middle 50% range: ฿{q1:.1f}M - ฿{q3:.1f}M  \n"
+                            f"Range width: ฿{iqr:.1f}M")
+
         st.markdown("---")
         
         # Display projects table
