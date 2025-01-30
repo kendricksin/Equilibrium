@@ -3,7 +3,7 @@
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
-from typing import Optional
+from typing import Optional, Union, List
 import os
 from dotenv import load_dotenv
 
@@ -17,13 +17,19 @@ METRIC_DELTA_SIZE = os.getenv('METRIC_DELTA_SIZE', '0.8rem')
 METRIC_CONTAINER_PADDING = os.getenv('METRIC_CONTAINER_PADDING', '1rem')
 METRIC_BORDER_RADIUS = os.getenv('METRIC_BORDER_RADIUS', '0.5rem')
 
-def create_distribution_bar(data: pd.Series, title: str) -> go.Figure:
+def create_distribution_bar(
+    data: pd.Series, 
+    title: str,
+    base_color: Union[str, List[str]] = 'rgb(255, 50, 50)'  # Default to red
+) -> go.Figure:
     """
     Create a horizontal stacked bar chart showing distribution
     
     Args:
         data (pd.Series): Value counts of categories
         title (str): Chart title
+        base_color (Union[str, List[str]]): Base color for the gradient. Can be a single color
+            or a list of two colors for custom gradient. Default is red.
         
     Returns:
         go.Figure: Plotly figure object
@@ -34,11 +40,58 @@ def create_distribution_bar(data: pd.Series, title: str) -> go.Figure:
     # Sort by percentage
     percentages = percentages.sort_values(ascending=True)
     
-    # Calculate color gradient - using a safer approach
+    # Calculate color gradient
     n_items = len(data)
+    
+    if isinstance(base_color, list) and len(base_color) >= 2:
+        # Use provided gradient colors
+        from_color = base_color[0]
+        to_color = base_color[1]
+    else:
+        # Create gradient from single color with transparency
+        if base_color.startswith('rgb'):
+            # Convert rgb to rgba format
+            if 'rgba' not in base_color:
+                base_color = base_color.replace('rgb', 'rgba').replace(')', ',')
+        elif base_color.startswith('#'):
+            # Convert hex to rgba format
+            hex_color = base_color.lstrip('#')
+            r = int(hex_color[0:2], 16)
+            g = int(hex_color[2:4], 16)
+            b = int(hex_color[4:6], 16)
+            base_color = f'rgba({r}, {g}, {b}, '
+        
+        from_color = f'{base_color}0.05)'
+        to_color = f'{base_color}1)'
+    
+    def parse_color(color):
+        """Helper function to parse color string to RGB values"""
+        if color.startswith('rgba'):
+            # Extract RGB values from rgba string
+            values = color.replace('rgba(', '').replace(')', '').split(',')
+            return [int(v.strip()) for v in values[:3]]
+        elif color.startswith('rgb'):
+            # Extract RGB values from rgb string
+            values = color.replace('rgb(', '').replace(')', '').split(',')
+            return [int(v.strip()) for v in values]
+        elif color.startswith('#'):
+            # Convert hex to RGB values
+            hex_color = color.lstrip('#')
+            return [
+                int(hex_color[i:i+2], 16)
+                for i in (0, 2, 4)
+            ]
+        return [0, 0, 0]  # Default to black if invalid color
+
+    # Parse the gradient colors
+    color1 = parse_color(from_color)
+    color2 = parse_color(to_color)
+    
+    # Generate color gradient
     colors = [
-        f'rgba(255, 50, 50, {0.05 + ((i)/n_items)*0.95})'  # Blue with varying opacity
+        f'rgba({int(c1 * (1 - i/n_items) + c2 * (i/n_items))}, {int(g1 * (1 - i/n_items) + g2 * (i/n_items))}, {int(b1 * (1 - i/n_items) + b2 * (i/n_items))}, 1)'
         for i in range(n_items)
+        for (c1, g1, b1), (c2, g2, b2) in [(color1, color2)]
     ]
     
     # Create the figure
@@ -55,7 +108,17 @@ def create_distribution_bar(data: pd.Series, title: str) -> go.Figure:
             text=f'{name}: {pct:.1f}%' if pct > 5 else '',
             textposition='inside',
             insidetextanchor='middle',
-            marker_color=colors[i],
+            marker=dict(
+                color=colors[i],
+                line=dict(
+                    color='rgba(255, 255, 255, 0.5)',  # Semi-transparent black outline
+                    width=1
+                ),
+                pattern=dict(
+                    shape="",  # No pattern, just for gradient effect
+                    solidity=0.1 + ((i+1)/len(percentages)) * 0.9  # Gradient based on position
+                )
+            ),
             showlegend=False,
         ))
         left += pct
@@ -177,7 +240,11 @@ def MetricsSummary(df: Optional[pd.DataFrame] = None):
                 with col1:
                     # Purchase methods distribution
                     purchase_methods = df['purchase_method_name'].value_counts()
-                    fig_methods = create_distribution_bar(purchase_methods, "Purchase Methods")
+                    fig_methods = create_distribution_bar(
+                        purchase_methods, 
+                        "Purchase Methods",
+                        base_color='rgb(255, 50, 50)'  # Keeping red as default
+                    )
                     st.plotly_chart(fig_methods, use_container_width=True, config={'displayModeBar': False})
                     
                     # Show top method details
@@ -188,7 +255,11 @@ def MetricsSummary(df: Optional[pd.DataFrame] = None):
                 with col2:
                     # Project types distribution
                     project_types = df['project_type_name'].value_counts()
-                    fig_types = create_distribution_bar(project_types, "Project Types")
+                    fig_types = create_distribution_bar(
+                        project_types, 
+                        "Project Types",
+                        base_color='rgb(255, 50, 50)'  # Keeping red as default
+                    )
                     st.plotly_chart(fig_types, use_container_width=True, config={'displayModeBar': False})
                     
                     # Show top type details
