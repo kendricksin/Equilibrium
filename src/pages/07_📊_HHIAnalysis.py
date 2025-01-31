@@ -24,12 +24,12 @@ def calculate_hhi(market_shares):
 
 def interpret_hhi(hhi):
     """Interpret HHI value"""
-    if hhi < 1500:
-        return "Competitive Market", "Low concentration"
-    elif hhi < 2500:
-        return "Moderately Concentrated", "Medium concentration"
+    if hhi < 900:
+        return "Competitive", "Low"
+    elif hhi < 1600:
+        return "Moderate", "Medium"
     else:
-        return "Highly Concentrated", "High concentration"
+        return "Dominated", "High"
 
 def get_company_colors(n):
     """Generate a list of distinct colors for companies"""
@@ -83,15 +83,34 @@ def HHIAnalysis():
     st.info(f"📊 Analyzing data from: {source}")
 
     if df is not None and not df.empty:
-        # Calculate market shares
-        total_value = df['sum_price_agree'].sum()
-        company_shares = (df.groupby('winner')['sum_price_agree']
-                        .sum()
-                        .sort_values(ascending=False)
-                        .reset_index())
+        # Calculate market shares and price cuts
+        # First calculate price cuts for each project
+        df['price_cut'] = ((df['sum_price_agree'] / df['price_build'] - 1) * 100)
         
+        # Group by company and calculate metrics
+        company_metrics = df.groupby('winner').agg({
+            'sum_price_agree': 'sum',
+            'price_cut': ['mean', 'min', 'max'],
+            'project_id': 'count'
+        })
+        
+        # Flatten column names
+        company_metrics.columns = [
+            'sum_price_agree',
+            'avg_price_cut',
+            'min_price_cut',
+            'max_price_cut',
+            'project_count'
+        ]
+        
+        # Calculate market shares
+        total_value = company_metrics['sum_price_agree'].sum()
+        company_shares = company_metrics.reset_index()
         company_shares['market_share'] = (company_shares['sum_price_agree'] / total_value) * 100
         company_shares['value_millions'] = company_shares['sum_price_agree']
+
+        # Sort by market share
+        company_shares = company_shares.sort_values('market_share', ascending=False)
         
         # Check number of companies
         if len(company_shares) > 20:
@@ -103,13 +122,29 @@ def HHIAnalysis():
         status, concentration = interpret_hhi(hhi)
         
         # Display HHI metrics
-        col1, col2, col3 = st.columns(3)
+        col1, col2, col3, col4, col5 = st.columns(5)
         with col1:
             st.metric("HHI Index", f"{hhi:,.0f}")
         with col2:
-            st.metric("Market Status", status)
+            st.metric("Market category", status)
         with col3:
             st.metric("Concentration Level", concentration)
+        with col4:
+            avg_price_cut = company_shares['avg_price_cut'].mean()
+            st.metric(
+                "Avg Price Cut", 
+                f"{avg_price_cut:.1f}%",
+                delta=f"{avg_price_cut:.1f}%",
+                delta_color="inverse" if avg_price_cut < -5 else "normal"
+            )
+        with col5:
+            max_price_cut = company_shares['min_price_cut'].min()  # Most negative price cut
+            st.metric(
+                "Max Price Cut",
+                f"{max_price_cut:.1f}%",
+                delta=f"{max_price_cut:.1f}%",
+                delta_color="inverse" if max_price_cut < -10 else "normal"
+            )
 
         # Get colors for each company
         company_colors = get_company_colors(len(company_shares))
@@ -233,9 +268,9 @@ def HHIAnalysis():
             st.markdown("""
             The Herfindahl-Hirschman Index (HHI) is a measure of market concentration that ranges from close to 0 to 10,000:
             
-            - **HHI < 1,500**: Competitive market
-            - **1,500 ≤ HHI ≤ 2,500**: Moderately concentrated market
-            - **HHI > 2,500**: Highly concentrated market
+            - **HHI < 900**: Competitive market (Top companies own less than 30% market share)
+            - **900 ≤ HHI ≤ 1,600**: Moderately concentrated market (Top companies own more than 30% market share)
+            - **HHI > 1,600**: Highly concentrated market (Top companies own more than 40% market share)
             
             The market concentration curve shows:
             - The gray dashed line represents perfect competition (equal market shares)
