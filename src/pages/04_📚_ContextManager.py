@@ -9,6 +9,14 @@ from services.database.collections import (
     get_collection_df,
     delete_collection
 )
+from components.tables.ProjectsTable import ProjectsTable  # Import ProjectsTable component
+
+def handle_duplicate_projects(df: pd.DataFrame) -> pd.DataFrame:
+    """Remove duplicate projects based on project_id if it exists"""
+    if 'project_id' in df.columns:
+        # Keep first occurrence of each project_id
+        df = df.drop_duplicates(subset=['project_id'], keep='first')
+    return df
 
 def display_collection_card(collection: Dict[str, Any], on_add_to_context):
     """Display a collection as a card with actions"""
@@ -78,11 +86,26 @@ def ContextManager():
     
     with col1:
         if st.session_state.context_df is not None:
+            # Get original and deduplicated counts
+            original_count = len(st.session_state.context_df)
+            deduplicated_df = handle_duplicate_projects(st.session_state.context_df.copy())
+            deduplicated_count = len(deduplicated_df)
+            
             st.markdown(f"""
             **Active Collections:** {len(st.session_state.context_collections)}  
-            **Total Rows:** {len(st.session_state.context_df):,}  
-            **Total Columns:** {len(st.session_state.context_df.columns)}
+            **Total Projects:** {deduplicated_count:,} {'(after removing duplicates)' if deduplicated_count != original_count else ''}  
+            **Total Columns:** {len(deduplicated_df.columns)}
             """)
+            
+            # Show preview table in collapsible expander
+            with st.expander("🔍 Preview Projects", expanded=False):
+                st.markdown("### Projects Preview")
+                ProjectsTable(
+                    df=deduplicated_df,
+                    show_search=True,
+                    show_save_collection=False,
+                    key_prefix="context_preview_"
+                )
         else:
             st.info("No collections added to context")
     
@@ -97,6 +120,15 @@ def ContextManager():
         st.markdown("### Active Collections")
         for coll in st.session_state.context_collections:
             st.markdown(f"- {coll['name']} ({coll['row_count']:,} rows)")
+            
+            # If we have duplicates, show the count difference
+            if st.session_state.context_df is not None:
+                df = get_collection_df(coll['name'])
+                if df is not None:
+                    original_count = len(df)
+                    deduped_count = len(handle_duplicate_projects(df))
+                    if original_count != deduped_count:
+                        st.markdown(f"  - *{original_count - deduped_count:,} duplicate projects removed*")
     
     # Saved Collections Section
     st.markdown("---")
@@ -132,7 +164,6 @@ def ContextManager():
         ascending=ascending
     )
     
-    # Display collections
     def add_to_context(collection):
         if collection['name'] not in [c['name'] for c in st.session_state.context_collections]:
             # Get collection data
@@ -146,10 +177,12 @@ def ContextManager():
                 if st.session_state.context_df is None:
                     st.session_state.context_df = new_df
                 else:
-                    st.session_state.context_df = pd.concat(
+                    combined_df = pd.concat(
                         [st.session_state.context_df, new_df],
                         ignore_index=True
                     )
+                    # Remove duplicates when combining
+                    st.session_state.context_df = handle_duplicate_projects(combined_df)
                 
                 st.success(f"Added '{collection['name']}' to context")
                 st.rerun()

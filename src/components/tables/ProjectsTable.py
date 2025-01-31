@@ -5,14 +5,23 @@ import pandas as pd
 from typing import Dict, Optional, Any
 from components.layout.SaveCollection import SaveCollection
 
-
 def ProjectsTable(
     df: pd.DataFrame,
     filters: Optional[Dict[str, Any]] = None,
     show_search: bool = True,
+    show_save_collection: bool = True,  # New parameter
     key_prefix: str = ""
 ):
-    """A component that displays project information in a table format."""
+    """
+    A component that displays project information in a table format.
+    
+    Args:
+        df (pd.DataFrame): DataFrame containing project data
+        filters (Optional[Dict[str, Any]]): Optional filters to apply
+        show_search (bool): Whether to show search and sort controls
+        show_save_collection (bool): Whether to show the Save Collection expander
+        key_prefix (str): Prefix for component keys
+    """
     # Create a copy of the DataFrame for filtering
     display_df = df.copy()
     
@@ -124,9 +133,10 @@ def ProjectsTable(
     
     st.markdown(f"Showing {len(display_df)} projects")
 
-    # Add Save Collection component
-    SaveCollection(
-        df=display_df,
-        source="project_search",
-        key_prefix=f"{key_prefix}table_"
-    )
+    # Only show SaveCollection if enabled
+    if show_save_collection:
+        SaveCollection(
+            df=display_df,
+            source="project_search",
+            key_prefix=f"{key_prefix}table_"
+        )

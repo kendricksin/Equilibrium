@@ -6,6 +6,8 @@ import plotly.graph_objects as go
 from components.layout.MetricsSummary import create_distribution_bar
 from state.session import SessionState
 from special_functions.context_util import get_analysis_data, show_context_info
+from services.analytics.company_comparison import CompanyComparisonService
+from typing import List
 
 st.set_page_config(layout="wide")
 
@@ -31,31 +33,42 @@ def interpret_hhi(hhi):
     else:
         return "Dominated", "High"
 
-def get_company_colors(n):
-    """Generate a list of distinct colors for companies"""
+def get_company_colors(n: int) -> List[str]:
+    """
+    Get up to 20 distinct colors for company visualizations.
+    If more than 20 colors are requested, returns 20.
+    
+    Args:
+        n (int): Number of colors requested
+        
+    Returns:
+        List[str]: List of RGB color strings (maximum 20)
+    """
     colors = [
-        'rgb(31, 119, 180)',   # blue
-        'rgb(255, 127, 14)',   # orange
-        'rgb(44, 160, 44)',    # green
-        'rgb(214, 39, 40)',    # red
-        'rgb(148, 103, 189)',  # purple
-        'rgb(140, 86, 75)',    # brown
-        'rgb(227, 119, 194)',  # pink
-        'rgb(127, 127, 127)',  # gray
-        'rgb(188, 189, 34)',   # olive
-        'rgb(23, 190, 207)',   # cyan
-        'rgb(141, 211, 199)',
-        'rgb(255, 255, 179)',
-        'rgb(190, 186, 218)',
-        'rgb(251, 128, 114)',
-        'rgb(128, 177, 211)',
-        'rgb(253, 180, 98)',
-        'rgb(179, 222, 105)',
-        'rgb(252, 205, 229)',
-        'rgb(217, 217, 217)',
-        'rgb(188, 128, 189)'
+        'rgb(31, 119, 180)',    # blue
+        'rgb(255, 127, 14)',    # orange
+        'rgb(44, 160, 44)',     # green
+        'rgb(214, 39, 40)',     # red
+        'rgb(148, 103, 189)',   # purple
+        'rgb(140, 86, 75)',     # brown
+        'rgb(227, 119, 194)',   # pink
+        'rgb(127, 127, 127)',   # gray
+        'rgb(188, 189, 34)',    # olive
+        'rgb(23, 190, 207)',    # cyan
+        'rgb(141, 211, 199)',   # light blue-green
+        'rgb(255, 255, 179)',   # light yellow
+        'rgb(190, 186, 218)',   # light purple
+        'rgb(251, 128, 114)',   # light red
+        'rgb(128, 177, 211)',   # light blue
+        'rgb(253, 180, 98)',    # light orange
+        'rgb(179, 222, 105)',   # light green
+        'rgb(252, 205, 229)',   # light pink
+        'rgb(217, 217, 217)',   # light gray
+        'rgb(188, 128, 189)'    # medium purple
     ]
-    return colors[:n]
+    
+    # Return at most 20 colors
+    return colors[:min(n, 20)]
 
 def get_distribution_data(df, company, column):
     """Get distribution percentages for a specific company and column"""
@@ -158,8 +171,80 @@ def HHIAnalysis():
                                 max_value=len(company_shares), 
                                 value=min(5, len(company_shares)))
         
+        # Group Competition Analysis Section
+        st.markdown("### 🎯 Group Competition Analysis")
+        st.markdown("Analyzing competition patterns among top companies")
+        
+        # Calculate group metrics
+        group_metrics = CompanyComparisonService.calculate_group_competition_metrics(df, company_shares['winner'].tolist())
+        
+        # Display competition heatmaps
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            # Direct competitions heatmap
+            comp_fig = CompanyComparisonService.create_competition_heatmap(
+                group_metrics['competition_matrix'],
+                'Direct Competitions Between Companies'
+            )
+            st.plotly_chart(comp_fig, use_container_width=True)
+        
+        with col2:
+            # Department overlap heatmap
+            overlap_fig = CompanyComparisonService.create_competition_heatmap(
+                group_metrics['dept_overlap_matrix'],
+                'Sub-Department Overlap (%)'
+            )
+            st.plotly_chart(overlap_fig, use_container_width=True)
+        
+        # Network visualization
+        st.markdown("#### Competition Network")
+        min_competitions = st.slider(
+            "Minimum competitions for connection",
+            min_value=1,
+            max_value=20,
+            value=5
+        )
+        
+        network_fig = CompanyComparisonService.create_network_graph(group_metrics, threshold=min_competitions)
+        st.plotly_chart(network_fig, use_container_width=True)
+        
+        # Key insights
+        insights = CompanyComparisonService.calculate_group_insights(group_metrics)
+        
+        with st.expander("View Competition Insights"):
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.markdown("**Top Competing Pairs**")
+                for (comp1, comp2), competitions in insights['top_competitions'].items():
+                    st.markdown(f"- {comp1} vs {comp2}: {int(competitions)} competitions")
+            
+            with col2:
+                st.markdown("**Highest Department Overlaps**")
+                for (comp1, comp2), overlap in insights['top_overlaps'].items():
+                    st.markdown(f"- {comp1} & {comp2}: {overlap:.1f}% overlap")
+            
+            # Competition intensity metrics
+            st.markdown("**Most Active Competitors**")
+            intensity_df = pd.DataFrame(list(insights['competition_intensity'].items()),
+                                      columns=['Company', 'Total Competitions'])
+            intensity_df = intensity_df.sort_values('Total Competitions', ascending=False).head(5)
+            
+            st.dataframe(
+                intensity_df,
+                column_config={
+                    'Company': st.column_config.TextColumn('Company'),
+                    'Total Competitions': st.column_config.NumberColumn(
+                        'Total Competitions',
+                        format="%d"
+                    )
+                },
+                hide_index=True
+            )
+
         # Display distributions for selected number of companies
-        for idx, company_data in company_shares.head(num_companies).iterrows():
+        for i, (_, company_data) in enumerate(company_shares.head(num_companies).iterrows()):
             company = company_data['winner']
             
             st.markdown(f"#### {company}")
@@ -174,7 +259,7 @@ def HHIAnalysis():
                     fig1 = create_distribution_bar(
                         purchase_dist,
                         "Distribution",
-                        base_color=company_colors[idx]
+                        base_color=company_colors[i]  # Use i instead of idx
                     )
                     st.plotly_chart(fig1, use_container_width=True)
                 else:
@@ -187,14 +272,14 @@ def HHIAnalysis():
                     fig2 = create_distribution_bar(
                         project_dist,
                         "Distribution",
-                        base_color=company_colors[idx]
+                        base_color=company_colors[i]  # Use i instead of idx
                     )
                     st.plotly_chart(fig2, use_container_width=True)
                 else:
                     st.info("No project type data available")
             
             st.markdown("---")
-        
+                
         # Display detailed metrics table
         st.markdown("### 📋 Company Market Share Details")
         
