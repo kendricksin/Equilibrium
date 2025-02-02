@@ -20,7 +20,8 @@ METRIC_BORDER_RADIUS = os.getenv('METRIC_BORDER_RADIUS', '0.5rem')
 def create_distribution_bar(
     data: pd.Series, 
     title: str,
-    base_color: Union[str, List[str]] = 'rgb(255, 50, 50)'  # Default to red
+    base_color: Union[str, List[str]] = 'rgb(255, 50, 50)',  # Default to red
+    max_categories: int = 3  # Limit number of categories
 ) -> go.Figure:
     """
     Create a horizontal stacked bar chart showing distribution
@@ -28,100 +29,102 @@ def create_distribution_bar(
     Args:
         data (pd.Series): Value counts of categories
         title (str): Chart title
-        base_color (Union[str, List[str]]): Base color for the gradient. Can be a single color
-            or a list of two colors for custom gradient. Default is red.
+        base_color (Union[str, List[str]]): Base color for the gradient
+        max_categories (int): Maximum number of categories to show
         
     Returns:
         go.Figure: Plotly figure object
     """
-    # Calculate percentages
+    if data.empty:
+        return go.Figure()
+
+    # Calculate initial percentages
     percentages = (data / data.sum() * 100).round(1)
     
-    # Sort by percentage
+    # Handle categories limit
+    if len(percentages) > max_categories:
+        # Get top N-1 categories
+        top_categories = percentages.nlargest(max_categories - 1)
+        
+        # Calculate and add "Others" category
+        others_sum = percentages[~percentages.index.isin(top_categories.index)].sum()
+        if others_sum > 0:
+            top_categories = pd.concat([
+                top_categories,
+                pd.Series({'Others': others_sum})
+            ])
+        percentages = top_categories
+    
+    # Sort by percentage (ascending for visualization)
     percentages = percentages.sort_values(ascending=True)
     
-    # Calculate color gradient
-    n_items = len(data)
-    
-    if isinstance(base_color, list) and len(base_color) >= 2:
-        # Use provided gradient colors
-        from_color = base_color[0]
-        to_color = base_color[1]
-    else:
-        # Create gradient from single color with transparency
+    def generate_color_scale(n, base_color='rgb(255, 50, 50)'):
+        """Generate a color scale with varying opacity"""
+        if n <= 0:
+            return []
+            
+        if isinstance(base_color, list):
+            # Use the first color if a list is provided
+            base_color = base_color[0]
+            
+        # Extract RGB values
         if base_color.startswith('rgb'):
-            # Convert rgb to rgba format
-            if 'rgba' not in base_color:
-                base_color = base_color.replace('rgb', 'rgba').replace(')', ',')
-        elif base_color.startswith('#'):
-            # Convert hex to rgba format
-            hex_color = base_color.lstrip('#')
-            r = int(hex_color[0:2], 16)
-            g = int(hex_color[2:4], 16)
-            b = int(hex_color[4:6], 16)
-            base_color = f'rgba({r}, {g}, {b}, '
-        
-        from_color = f'{base_color}0.05)'
-        to_color = f'{base_color}1)'
+            rgb_values = base_color.replace('rgb(', '').replace(')', '').split(',')
+            r, g, b = map(int, rgb_values)
+        else:
+            # Default to red if color format is not recognized
+            r, g, b = 255, 50, 50
+            
+        # Generate colors with increasing opacity
+        colors = []
+        if n == 1:
+            # Special case for single category
+            colors.append(f'rgba({r}, {g}, {b}, 0.8)')
+        else:
+            for i in range(n):
+                opacity = 0.2 + (i / (n - 1)) * 0.8  # Scale from 0.2 to 1.0
+                colors.append(f'rgba({r}, {g}, {b}, {opacity})')
+            
+        return colors
     
-    def parse_color(color):
-        """Helper function to parse color string to RGB values"""
-        if color.startswith('rgba'):
-            # Extract RGB values from rgba string
-            values = color.replace('rgba(', '').replace(')', '').split(',')
-            return [int(v.strip()) for v in values[:3]]
-        elif color.startswith('rgb'):
-            # Extract RGB values from rgb string
-            values = color.replace('rgb(', '').replace(')', '').split(',')
-            return [int(v.strip()) for v in values]
-        elif color.startswith('#'):
-            # Convert hex to RGB values
-            hex_color = color.lstrip('#')
-            return [
-                int(hex_color[i:i+2], 16)
-                for i in (0, 2, 4)
-            ]
-        return [0, 0, 0]  # Default to black if invalid color
-
-    # Parse the gradient colors
-    color1 = parse_color(from_color)
-    color2 = parse_color(to_color)
+    # Calculate color gradient
+    n_items = len(percentages)
+    colors = generate_color_scale(n_items, base_color)
     
-    # Generate color gradient
-    colors = [
-        f'rgba({int(c1 * (1 - i/n_items) + c2 * (i/n_items))}, {int(g1 * (1 - i/n_items) + g2 * (i/n_items))}, {int(b1 * (1 - i/n_items) + b2 * (i/n_items))}, 1)'
-        for i in range(n_items)
-        for (c1, g1, b1), (c2, g2, b2) in [(color1, color2)]
-    ]
+    if not colors:  # Safety check
+        return go.Figure()
     
     # Create the figure
     fig = go.Figure()
     
     # Add bars
-    left = 0
     for i, (name, pct) in enumerate(percentages.items()):
+        text = f'{name}: {pct:.1f}%'
+        # Adjust text position and anchor based on percentage
+        if pct < 5:
+            textposition = 'outside'
+            insidetextanchor = 'start'
+        else:
+            textposition = 'inside'
+            insidetextanchor = 'middle'
+            
         fig.add_trace(go.Bar(
             x=[pct],
             y=[title],
             orientation='h',
             name=name,
-            text=f'{name}: {pct:.1f}%' if pct > 5 else '',
-            textposition='inside',
-            insidetextanchor='middle',
+            text=text,
+            textposition=textposition,
+            insidetextanchor=insidetextanchor,
             marker=dict(
                 color=colors[i],
                 line=dict(
-                    color='rgba(255, 255, 255, 0.5)',  # Semi-transparent black outline
+                    color='rgba(255, 255, 255, 0.5)',  # Semi-transparent white outline
                     width=1
-                ),
-                pattern=dict(
-                    shape="",  # No pattern, just for gradient effect
-                    solidity=0.1 + ((i+1)/len(percentages)) * 0.9  # Gradient based on position
                 )
             ),
             showlegend=False,
         ))
-        left += pct
     
     # Update layout
     fig.update_layout(
@@ -134,6 +137,7 @@ def create_distribution_bar(
             showticklabels=False,
             showgrid=False,
             zeroline=False,
+            range=[0, 100]  # Fix x-axis range to 0-100%
         ),
         yaxis=dict(
             showticklabels=False,
@@ -141,6 +145,10 @@ def create_distribution_bar(
             zeroline=False,
         ),
         bargap=0,
+        uniformtext=dict(
+            mode='hide',
+            minsize=8
+        )
     )
     
     return fig

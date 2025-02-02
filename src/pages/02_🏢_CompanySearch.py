@@ -13,24 +13,34 @@ logger = logging.getLogger(__name__)
 
 @st.cache_data(ttl=3600)
 def get_company_options():
-    """Get all companies with project counts"""
+    """Get all companies with project counts and winner_tin formatted at the start"""
     mongo = MongoDBService()
     try:
         collection = mongo.get_collection("companies")
         companies = list(collection.find(
             {},
-            {"winner": 1, "project_count": 1, "project_ids": 1}
+            {
+                "winner": 1, 
+                "project_count": 1, 
+                "project_ids": 1,
+                "winner_tin": 1
+            }
         ).sort("project_count", -1))
         
-        # Format options with project counts
+        # Format options with TIN at the start of each company name
         options = []
         for company in companies:
             project_count = len(company.get('project_ids', []))
+            winner_tin = company.get('winner_tin', '')
+            
             if project_count >= 5:  # Filter out companies with few projects
+                # Format: "0123456789012 บริษัท ชื่อบริษัท จำกัด (1,234 projects)"
+                display_name = f"{winner_tin:<13} {company['winner']} ({project_count:,} projects)"
                 options.append({
                     'name': company['winner'],
-                    'display': f"{company['winner']} ({project_count:,} projects)",
-                    'count': project_count
+                    'display': display_name,
+                    'count': project_count,
+                    'winner_tin': winner_tin
                 })
         
         return options
@@ -62,7 +72,7 @@ def CompanySearch():
     selected_display = st.multiselect(
         "Select Companies",
         options=company_options,
-        help="Select one or more companies to analyze their projects"
+        help="Select companies to analyze. You can search by company name or TIN number. Format: [TIN] Company Name (Project Count)"
     )
     
     # Convert display selections to company names

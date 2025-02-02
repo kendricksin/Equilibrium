@@ -167,9 +167,9 @@ def HHIAnalysis():
         
         # Add selection for number of companies to display
         num_companies = st.slider("Number of companies to show", 
-                                min_value=1, 
+                                min_value=0, 
                                 max_value=len(company_shares), 
-                                value=min(5, len(company_shares)))
+                                value=min(2, len(company_shares)))
         
         # Group Competition Analysis Section
         st.markdown("### 🎯 Group Competition Analysis")

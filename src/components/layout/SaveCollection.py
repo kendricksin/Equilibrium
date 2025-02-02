@@ -4,7 +4,7 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime, timedelta
 from typing import Optional, List
-from services.database.collections import save_collection
+from services.database.collections_manager import save_collection
 
 def SaveCollection(
     df: pd.DataFrame,
@@ -64,6 +64,13 @@ def SaveCollection(
                 return
                 
             try:
+                # Restore original values before saving
+                save_df = df.copy()
+                if 'sum_price_agree' in save_df.columns:
+                    save_df['sum_price_agree'] = save_df['sum_price_agree'] * 1e6
+                if 'price_build' in save_df.columns:
+                    save_df['price_build'] = save_df['price_build'] * 1e6
+                
                 # Process tags
                 tag_list = [
                     tag.strip() 
