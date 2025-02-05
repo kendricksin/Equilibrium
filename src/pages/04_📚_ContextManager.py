@@ -4,7 +4,7 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime
 from typing import Dict, Any
-from services.database.collections import (
+from services.database.collections_manager import (
     get_collections,
     get_collection_df,
     delete_collection

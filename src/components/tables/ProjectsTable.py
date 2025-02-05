@@ -84,10 +84,10 @@ def ProjectsTable(
     # Display the table with numerical sorting
     st.dataframe(
         display_df[[
-            'transaction_date', 
+            'transaction_date',
+            'project_id', 
             'project_name', 
             'winner', 
-            'price_build',
             'sum_price_agree', 
             'price_cut',
             'dept_name'
