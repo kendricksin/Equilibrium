@@ -98,6 +98,10 @@ def ProjectsTable(
                 width="small",
                 format="YYYY-MM-DD"
             ),
+            "project_id": st.column_config.TextColumn(
+                "ID",
+                width="small"
+            ),
             "project_name": st.column_config.TextColumn(
                 "Project",
                 width="large"
@@ -105,11 +109,6 @@ def ProjectsTable(
             "winner": st.column_config.TextColumn(
                 "Company",
                 width="medium"
-            ),
-            "price_build": st.column_config.NumberColumn(
-                "Budget",
-                width="small",
-                format="%.2f M฿"
             ),
             "sum_price_agree": st.column_config.NumberColumn(
                 "Final Value",
