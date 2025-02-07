@@ -8,6 +8,7 @@ from components.filters.TableFilter import filter_projects
 from components.tables.ProjectsTable import ProjectsTable
 from state.session import SessionState
 from services.database.mongodb import MongoDBService
+from services.analytics.period_analysis import PeriodAnalysisService
 from services.cache.department_cache import (
     get_departments,
     get_department_stats,
@@ -196,6 +197,45 @@ def DepartmentSearch():
                     st.markdown(f"**{method}**  \n"
                               f"{count:,} projects ({percentage:.1f}%)")
         
+        st.markdown("---")
+
+        # Period Analysis Section
+        st.markdown("### 📈 Period Analysis")
+
+        metric = st.selectbox(
+            "Select Metric",
+            options=['project_value', 'project_count'],
+            format_func=lambda x: "Project Value" if x == "project_value" else "Project Count",
+            key="metric"
+        )
+
+        try:
+            # Calculate period analysis for all periods
+            results = PeriodAnalysisService.analyze_all_periods(
+                display_df,
+                metric=metric
+            )
+            
+            # Create visualization
+            fig = PeriodAnalysisService.create_combined_chart(results, metric)
+            st.plotly_chart(fig, use_container_width=True)
+            
+            # Display summary in columns
+            st.markdown("#### Summary")
+            cols = st.columns(4)
+            for idx, (period_name, (_, summary)) in enumerate(results.items()):
+                with cols[idx]:
+                    formatter = summary['formatter']
+                    st.markdown(f"""
+                    **{period_name}**  
+                    Current: {formatter(summary['current_value'])}  
+                    Change: {summary['change_percentage']:.1f}%  
+                    ({summary['trend']})
+                    """)
+
+        except Exception as e:
+            st.error(f"Error performing period analysis: {str(e)}")
+
         st.markdown("---")
         
         # Display results table with built-in search and sorting
