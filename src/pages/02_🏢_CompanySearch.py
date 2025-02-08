@@ -6,6 +6,8 @@ from services.database.mongodb import MongoDBService
 from components.filters.TableFilter import filter_projects
 from components.layout.MetricsSummary import MetricsSummary
 from components.tables.ProjectsTable import ProjectsTable
+from services.analytics.period_analysis import PeriodAnalysisService
+from services.analytics.company_projects import CompanyProjectsService
 from state.session import SessionState
 import plotly.graph_objects as go
 
@@ -249,6 +251,88 @@ def CompanySearch():
                     st.markdown(f"**{company}**  \n"
                             f"Middle 50% range: ฿{q1:.1f}M - ฿{q3:.1f}M  \n"
                             f"Range width: ฿{iqr:.1f}M")
+
+        st.markdown("---")
+
+        # Period Analysis Section
+        st.markdown("### 📈 Period Analysis")
+
+        metric = st.selectbox(
+            "Select Metric",
+            options=['project_value', 'project_count'],
+            format_func=lambda x: "Project Value" if x == "project_value" else "Project Count",
+            key="metric"
+        )
+
+        try:
+            # Calculate period analysis for all periods
+            results = PeriodAnalysisService.analyze_all_periods(
+                display_df,
+                metric=metric
+            )
+            
+            # Create visualization
+            fig = PeriodAnalysisService.create_combined_chart(results, metric)
+            st.plotly_chart(fig, use_container_width=True)
+            
+            # Display summary in columns
+            st.markdown("#### Summary")
+            cols = st.columns(4)
+            for idx, (period_name, (_, summary)) in enumerate(results.items()):
+                with cols[idx]:
+                    formatter = summary['formatter']
+                    st.markdown(f"""
+                    **{period_name}**  
+                    Current: {formatter(summary['current_value'])}  
+                    Change: {summary['change_percentage']:.1f}%  
+                    ({summary['trend']})
+                    """)
+
+        except Exception as e:
+            st.error(f"Error performing period analysis: {str(e)}")
+
+        st.markdown("---")
+
+        # Project Distribution range charts
+        st.markdown("### 📊 Company Project Distribution by Value Range")
+
+        try:
+            # Prepare data for all ranges
+            range_data = CompanyProjectsService.prepare_data(display_df)
+            
+            # Show statistics in columns
+            st.markdown("#### Distribution Statistics")
+            stats = CompanyProjectsService.get_range_statistics(range_data)
+            
+            cols = st.columns(4)
+            for idx, stat in enumerate(stats):
+                with cols[idx]:
+                    st.markdown(
+                        f"""<div style='padding: 10px; border-radius: 5px; background-color: {stat['color']}20;'>
+                        <h4>{stat['range']}</h4>
+                        Projects: {stat['total_projects']:,}<br>
+                        Companies: {stat['total_companies']:,}<br>
+                        Total Value: ฿{stat['total_value']:.1f}M<br>
+                        Avg Value: ฿{stat['avg_value']:.1f}M
+                        </div>""",
+                        unsafe_allow_html=True
+                    )
+            
+            # Create individual charts
+            st.markdown("#### Project Distribution")
+            for value_range in CompanyProjectsService.VALUE_RANGES:
+                range_name = value_range['name']
+                if range_name in range_data:
+                    fig = CompanyProjectsService.create_chart_for_range(
+                        range_data[range_name],
+                        range_name,
+                        value_range['color']
+                    )
+                    st.plotly_chart(fig, use_container_width=True)
+                    st.markdown("---")
+            
+        except Exception as e:
+            st.error(f"Error creating company distribution charts: {str(e)}")
 
         st.markdown("---")
         

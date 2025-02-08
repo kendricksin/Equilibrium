@@ -239,22 +239,17 @@ def DepartmentSearch():
 
         st.markdown("---")
 
-        # Project Distribution Analysis
+        # Project Distribution range charts
         st.markdown("### 📊 Company Project Distribution by Value Range")
 
         try:
             # Prepare data for all ranges
             range_data = CompanyProjectsService.prepare_data(display_df)
             
-            # Create visualization
-            fig = CompanyProjectsService.create_charts(range_data)
-            st.plotly_chart(fig, use_container_width=True)
-            
-            # Show statistics
+            # Show statistics in columns
             st.markdown("#### Distribution Statistics")
             stats = CompanyProjectsService.get_range_statistics(range_data)
             
-            # Create columns for stats
             cols = st.columns(4)
             for idx, stat in enumerate(stats):
                 with cols[idx]:
@@ -268,6 +263,19 @@ def DepartmentSearch():
                         </div>""",
                         unsafe_allow_html=True
                     )
+            
+            # Create individual charts
+            st.markdown("#### Project Distribution")
+            for value_range in CompanyProjectsService.VALUE_RANGES:
+                range_name = value_range['name']
+                if range_name in range_data:
+                    fig = CompanyProjectsService.create_chart_for_range(
+                        range_data[range_name],
+                        range_name,
+                        value_range['color']
+                    )
+                    st.plotly_chart(fig, use_container_width=True)
+                    st.markdown("---")
             
         except Exception as e:
             st.error(f"Error creating company distribution charts: {str(e)}")

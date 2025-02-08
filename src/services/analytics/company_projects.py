@@ -2,8 +2,7 @@
 
 import pandas as pd
 import plotly.graph_objects as go
-from plotly.subplots import make_subplots
-from typing import Dict, List, Any, Tuple
+from typing import Dict, List, Any
 
 class CompanyProjectsService:
     """Service for analyzing project distribution across companies"""
@@ -46,93 +45,75 @@ class CompanyProjectsService:
         return range_data
 
     @staticmethod
-    def create_charts(range_data: Dict[str, pd.DataFrame]) -> go.Figure:
-        """Create vertical subplots for each value range"""
-        # Count number of non-empty ranges
-        n_ranges = sum(1 for r in CompanyProjectsService.VALUE_RANGES if r['name'] in range_data)
+    def create_chart_for_range(df: pd.DataFrame, range_name: str, color: str) -> go.Figure:
+        """Create individual chart for a value range"""
+        # Get companies sorted by total value
+        company_totals = df.groupby('winner')['value_millions'].sum()
+        companies = company_totals.sort_values(ascending=True).index
         
-        # Create vertical subplots
-        fig = make_subplots(
-            rows=n_ranges, cols=1,
-            subplot_titles=[f"Projects {range_name}" for range_name in range_data.keys()],
-            vertical_spacing=0.05
-        )
+        fig = go.Figure()
         
-        # Add bars for each range
-        current_row = 1
-        for value_range in CompanyProjectsService.VALUE_RANGES:
-            range_name = value_range['name']
-            if range_name in range_data:
-                df = range_data[range_name]
-                
-                # Get companies sorted by total value
-                company_totals = df.groupby('winner')['value_millions'].sum()
-                companies = company_totals.sort_values(ascending=True).index
-                
-                # Add bars for each project
-                for _, row_data in df.iterrows():
-                    fig.add_trace(
-                        go.Bar(
-                            name='',
-                            y=[row_data['winner']],
-                            x=[row_data['value_millions']],
-                            orientation='h',
-                            showlegend=False,
-                            marker=dict(
-                                color=value_range['color'],
-                                line=dict(color='rgb(50, 50, 50)', width=1)  # Add outline
-                            ),
-                            customdata=[[
-                                row_data['project_name'],
-                                row_data['value_millions'],
-                                row_data['transaction_date'].strftime('%Y-%m-%d')
-                            ]],
-                            hovertemplate=(
-                                "%{customdata[0]}<br><br>" +
-                                "Value: ฿%{customdata[1]:.1f}M<br>" +
-                                "Date: %{customdata[2]}" +
-                                "<extra></extra>"
-                            ),
-                            hoverlabel=dict(
-                                bgcolor="white",
-                                font_size=13,
-                                font_family="Arial",
-                                namelength=-1  # Show full text
-                            )
-                        ),
-                        row=current_row,
-                        col=1
+        # Add bars for each project
+        for _, row_data in df.iterrows():
+            # Calculate price cut percentage
+            price_cut = ((row_data['sum_price_agree'] / row_data['price_build']) - 1) * 100
+            
+            fig.add_trace(
+                go.Bar(
+                    name='',
+                    x=[row_data['winner']],
+                    y=[row_data['value_millions']],
+                    orientation='v',
+                    showlegend=False,
+                    marker=dict(
+                        color=color,
+                        line=dict(color='rgb(50, 50, 50)', width=1)
+                    ),
+                    customdata=[[
+                        row_data['project_name'],
+                        row_data['value_millions'],
+                        row_data['transaction_date'].strftime('%Y-%m-%d'),
+                        price_cut,
+                        row_data.get('province', 'N/A'),
+                        row_data.get('district', 'N/A')
+                    ]],
+                    hovertemplate=(
+                        "<b>%{customdata[0]}</b><br>" +
+                        "฿%{customdata[1]:.1f}M | %{customdata[2]}<br>" +
+                        "Price Cut: %{customdata[3]:.1f}%<br>" +
+                        "%{customdata[4]}, %{customdata[5]}" +
+                        "<extra></extra>"
+                    ),
+                    hoverlabel=dict(
+                        bgcolor="rgba(255, 255, 255, 0.7)",  # Increased alpha
+                        bordercolor="rgba(0, 0, 0, 0.1)",    # Subtle border
+                        font_size=12,
+                        font_family="Arial",
+                        namelength=-1
                     )
-                
-                # Update axes for this subplot
-                fig.update_yaxes(
-                    categoryorder='array',
-                    categoryarray=companies,
-                    title='Company',
-                    row=current_row,
-                    col=1
                 )
-                fig.update_xaxes(
-                    title='Project Value (Million ฿)',
-                    row=current_row,
-                    col=1
-                )
-                
-                current_row += 1
+            )
         
-        # Calculate dynamic height based on number of companies in each range
-        total_companies = sum(len(df['winner'].unique()) for df in range_data.values())
-        height_per_company = 25  # pixels per company
-        min_height_per_plot = 200  # minimum height per subplot
+        # Calculate dynamic height based on number of companies
+        height = max(len(companies) * 25, 200)
         
         # Update layout
         fig.update_layout(
-            height=max(total_companies * height_per_company, n_ranges * min_height_per_plot),
-            title_text="Project Distribution by Value Range",
+            title=f"Projects {range_name}",
+            height=500,  # Fixed height since we're using vertical bars
             showlegend=False,
             barmode='stack',
             bargap=0.2,
-            margin=dict(t=60, l=20, r=20, b=20)
+            margin=dict(t=40, l=20, r=20, b=100),  # Increased bottom margin for company names
+            xaxis=dict(
+                categoryorder='array',
+                categoryarray=companies,
+                title='Company',
+                tickangle=45  # Angled labels for better readability
+            ),
+            yaxis=dict(
+                title='Project Value (Million ฿)'
+            )
         )
         
         return fig
