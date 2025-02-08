@@ -9,6 +9,7 @@ from components.tables.ProjectsTable import ProjectsTable
 from state.session import SessionState
 from services.database.mongodb import MongoDBService
 from services.analytics.period_analysis import PeriodAnalysisService
+from services.analytics.company_projects import CompanyProjectsService
 from services.cache.department_cache import (
     get_departments,
     get_department_stats,
@@ -235,6 +236,41 @@ def DepartmentSearch():
 
         except Exception as e:
             st.error(f"Error performing period analysis: {str(e)}")
+
+        st.markdown("---")
+
+        # Project Distribution Analysis
+        st.markdown("### 📊 Company Project Distribution by Value Range")
+
+        try:
+            # Prepare data for all ranges
+            range_data = CompanyProjectsService.prepare_data(display_df)
+            
+            # Create visualization
+            fig = CompanyProjectsService.create_charts(range_data)
+            st.plotly_chart(fig, use_container_width=True)
+            
+            # Show statistics
+            st.markdown("#### Distribution Statistics")
+            stats = CompanyProjectsService.get_range_statistics(range_data)
+            
+            # Create columns for stats
+            cols = st.columns(4)
+            for idx, stat in enumerate(stats):
+                with cols[idx]:
+                    st.markdown(
+                        f"""<div style='padding: 10px; border-radius: 5px; background-color: {stat['color']}20;'>
+                        <h4>{stat['range']}</h4>
+                        Projects: {stat['total_projects']:,}<br>
+                        Companies: {stat['total_companies']:,}<br>
+                        Total Value: ฿{stat['total_value']:.1f}M<br>
+                        Avg Value: ฿{stat['avg_value']:.1f}M
+                        </div>""",
+                        unsafe_allow_html=True
+                    )
+            
+        except Exception as e:
+            st.error(f"Error creating company distribution charts: {str(e)}")
 
         st.markdown("---")
         
