@@ -3,6 +3,7 @@
 import streamlit as st
 import pandas as pd
 from datetime import datetime
+import math
 from components.layout.MetricsSummary import MetricsSummary
 from components.filters.TableFilter import filter_projects
 from components.tables.ProjectsTable import ProjectsTable
@@ -239,7 +240,6 @@ def DepartmentSearch():
 
         st.markdown("---")
 
-        # Project Distribution range charts
         st.markdown("### 📊 Company Project Distribution by Value Range")
 
         try:
@@ -250,19 +250,40 @@ def DepartmentSearch():
             st.markdown("#### Distribution Statistics")
             stats = CompanyProjectsService.get_range_statistics(range_data)
             
-            cols = st.columns(4)
-            for idx, stat in enumerate(stats):
-                with cols[idx]:
-                    st.markdown(
-                        f"""<div style='padding: 10px; border-radius: 5px; background-color: {stat['color']}20;'>
-                        <h4>{stat['range']}</h4>
-                        Projects: {stat['total_projects']:,}<br>
-                        Companies: {stat['total_companies']:,}<br>
-                        Total Value: ฿{stat['total_value']:.1f}M<br>
-                        Avg Value: ฿{stat['avg_value']:.1f}M
-                        </div>""",
-                        unsafe_allow_html=True
-                    )
+            # Calculate optimal column layout (3 stats per row)
+            num_stats = len(stats)
+            stats_per_row = 3
+            num_rows = math.ceil(num_stats / stats_per_row)
+            
+            # Display statistics in rows
+            for row in range(num_rows):
+                start_idx = row * stats_per_row
+                end_idx = min(start_idx + stats_per_row, num_stats)
+                row_stats = stats[start_idx:end_idx]
+                
+                # Create columns for this row
+                cols = st.columns(stats_per_row)
+                
+                # Fill columns with stats
+                for col_idx, stat in enumerate(row_stats):
+                    with cols[col_idx]:
+                        st.markdown(
+                            f"""<div style='padding: 10px; border-radius: 5px; background-color: {stat['color']}20;'>
+                            <h4>{stat['range']}</h4>
+                            Projects: {stat['total_projects']:,}<br>
+                            Companies: {stat['total_companies']:,}<br>
+                            Total Value: ฿{stat['total_value']:.1f}M<br>
+                            Avg Value: ฿{stat['avg_value']:.1f}M
+                            </div>""",
+                            unsafe_allow_html=True
+                        )
+                
+                # Add empty columns if needed to complete the row
+                remaining_cols = stats_per_row - len(row_stats)
+                if remaining_cols > 0:
+                    for _ in range(remaining_cols):
+                        with cols[-(remaining_cols)]:
+                            st.empty()
             
             # Create individual charts
             st.markdown("#### Project Distribution")
@@ -279,6 +300,7 @@ def DepartmentSearch():
             
         except Exception as e:
             st.error(f"Error creating company distribution charts: {str(e)}")
+            st.exception(e)  # This will show the full traceback in development
 
         st.markdown("---")
         

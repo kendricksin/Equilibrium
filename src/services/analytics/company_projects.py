@@ -3,15 +3,36 @@
 import pandas as pd
 import plotly.graph_objects as go
 from typing import Dict, List, Any
+import random
 
 class CompanyProjectsService:
     """Service for analyzing project distribution across companies"""
     
+    # Safe, light colors from Plotly's built-in colors
+    SAFE_COLORS = [
+        '#FFB6C1',  # lightpink
+        '#98FB98',  # palegreen
+        '#87CEFA',  # lightskyblue
+        '#DDA0DD',  # plum
+        '#F0E68C',  # khaki
+        '#E6E6FA',  # lavender
+        '#FFA07A',  # lightsalmon
+        '#B0E0E6',  # powderblue
+        '#FFE4B5',  # moccasin
+        '#F5DEB3',  # wheat
+        '#FFDAB9',  # peachpuff
+        '#AFEEEE',  # paleturquoise
+        '#D8BFD8',  # thistle
+        '#DEB887',  # burlywood
+        '#FA8072',  # salmon
+    ]
+    
     VALUE_RANGES = [
-        {'name': '>100M', 'min': 100, 'max': float('inf'), 'color': 'rgb(99, 110, 250)'},
-        {'name': '50-100M', 'min': 50, 'max': 100, 'color': 'rgb(239, 85, 59)'},
-        {'name': '10-50M', 'min': 10, 'max': 50, 'color': 'rgb(0, 204, 150)'},
-        {'name': '0-10M', 'min': 0, 'max': 10, 'color': 'rgb(171, 99, 250)'}
+        {'name': '>300M', 'min': 300, 'max': float('inf'), 'color': '#87CEFA'},
+        {'name': '100-300M', 'min': 100, 'max': 300, 'color': '#FFB6C1'},
+        {'name': '50-100M', 'min': 50, 'max': 100, 'color': '#98FB98'},
+        {'name': '10-50M', 'min': 10, 'max': 50, 'color': '#DDA0DD'},
+        {'name': '0-10M', 'min': 0, 'max': 10, 'color': '#F0E68C'}
     ]
     
     @staticmethod
@@ -47,26 +68,63 @@ class CompanyProjectsService:
     @staticmethod
     def create_chart_for_range(df: pd.DataFrame, range_name: str, color: str) -> go.Figure:
         """Create individual chart for a value range"""
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        logger.info(f"Creating chart for range: {range_name}")
+        logger.info(f"Input DataFrame shape: {df.shape}")
+        
+        if df.empty:
+            logger.error(f"Empty DataFrame for range {range_name}")
+            raise ValueError(f"Empty DataFrame for range {range_name}")
+        
         # Get companies sorted by total value
         company_totals = df.groupby('winner')['value_millions'].sum()
-        companies = company_totals.sort_values(ascending=True).index
+        companies = company_totals.sort_values(ascending=False).index
+        
+        # Calculate project counts per company
+        project_counts = df.groupby('winner').size()
         
         fig = go.Figure()
         
+        # Create a color map for years using safe colors
+        years = sorted(df['transaction_date'].dt.year.unique())
+        year_colors = {
+            year: CompanyProjectsService.SAFE_COLORS[i % len(CompanyProjectsService.SAFE_COLORS)]
+            for i, year in enumerate(years)
+        }
+        
         # Add bars for each project
         for _, row_data in df.iterrows():
-            # Calculate price cut percentage
-            price_cut = ((row_data['sum_price_agree'] / row_data['price_build']) - 1) * 100
+            # Calculate price cut percentage with validation
+            try:
+                if row_data['price_build'] == 0:
+                    logger.error(f"Zero price_build value found for project {row_data['project_name']}")
+                    price_cut = 0
+                else:
+                    price_cut = ((row_data['sum_price_agree'] / row_data['price_build']) - 1) * 100
+                    if abs(price_cut) > 100:
+                        logger.warning(f"Large price cut detected ({price_cut:.2f}%) for project {row_data['project_name']}")
+            except Exception as e:
+                logger.error(f"Error calculating price cut for project {row_data['project_name']}: {str(e)}")
+                price_cut = 0
+            
+            # Get year and its assigned color
+            year = row_data['transaction_date'].year
+            year_color = year_colors[year]
+
+            # Only show in legend if it's the first occurrence of this year
+            show_in_legend = str(year) not in [trace.name for trace in fig.data]
             
             fig.add_trace(
                 go.Bar(
-                    name='',
+                    name=str(year),
                     x=[row_data['winner']],
                     y=[row_data['value_millions']],
                     orientation='v',
-                    showlegend=False,
+                    showlegend=show_in_legend,
                     marker=dict(
-                        color=color,
+                        color=year_color,
                         line=dict(color='rgb(50, 50, 50)', width=1)
                     ),
                     customdata=[[
@@ -85,8 +143,8 @@ class CompanyProjectsService:
                         "<extra></extra>"
                     ),
                     hoverlabel=dict(
-                        bgcolor="rgba(255, 255, 255, 0.7)",  # Increased alpha
-                        bordercolor="rgba(0, 0, 0, 0.1)",    # Subtle border
+                        bgcolor="rgba(255, 255, 255, 0.7)",
+                        bordercolor="rgba(0, 0, 0, 0.1)",
                         font_size=12,
                         font_family="Arial",
                         namelength=-1
@@ -94,22 +152,45 @@ class CompanyProjectsService:
                 )
             )
         
-        # Calculate dynamic height based on number of companies
-        height = max(len(companies) * 25, 200)
+        # Add project count annotations at the top of each bar stack
+        for company in companies:
+            total_value = company_totals[company]
+            project_count = project_counts[company]
+            
+            fig.add_annotation(
+                x=company,
+                y=total_value,
+                text=f"{project_count} projects",
+                showarrow=False,
+                yshift=10,
+                font=dict(size=10),
+                bgcolor="rgba(255, 255, 255, 0.8)",
+                bordercolor="rgba(0, 0, 0, 0.1)",
+                borderwidth=1,
+                borderpad=4
+            )
         
         # Update layout
         fig.update_layout(
             title=f"Projects {range_name}",
-            height=500,  # Fixed height since we're using vertical bars
-            showlegend=False,
+            height=500,
+            showlegend=True,
+            legend=dict(
+                title="Transaction Year",
+                orientation="h",
+                yanchor="bottom",
+                y=1.02,
+                xanchor="right",
+                x=1
+            ),
             barmode='stack',
             bargap=0.2,
-            margin=dict(t=40, l=20, r=20, b=100),  # Increased bottom margin for company names
+            margin=dict(t=40, l=20, r=20, b=100),
             xaxis=dict(
                 categoryorder='array',
                 categoryarray=companies,
                 title='Company',
-                tickangle=45  # Angled labels for better readability
+                tickangle=45
             ),
             yaxis=dict(
                 title='Project Value (Million ฿)'
