@@ -11,6 +11,7 @@ from state.session import SessionState
 from services.database.mongodb import MongoDBService
 from services.analytics.period_analysis import PeriodAnalysisService
 from services.analytics.company_projects import CompanyProjectsService
+from services.analytics.subdept_projects import display_subdepartment_distribution
 from services.cache.department_cache import (
     get_departments,
     get_department_stats,
@@ -200,6 +201,11 @@ def DepartmentSearch():
                               f"{count:,} projects ({percentage:.1f}%)")
         
         st.markdown("---")
+
+        st.markdown("### Sub-department Analysis")
+
+        # Display the new sub-department distribution
+        display_subdepartment_distribution(filtered_df)
 
         # Period Analysis Section
         st.markdown("### 📈 Period Analysis")
