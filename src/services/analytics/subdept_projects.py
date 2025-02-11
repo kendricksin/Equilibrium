@@ -262,7 +262,7 @@ def display_subdepartment_distribution(display_df: Any):
                             )
         
         # Charts section
-        st.markdown("### Distribution Charts")
+        st.markdown("### Sub-dept Distribution Charts")
         
         # Create tabs for different value ranges
         if any(range_name in range_data for range_name in [r['name'] for r in SubDepartmentProjectsService.VALUE_RANGES]):
