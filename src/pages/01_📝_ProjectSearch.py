@@ -3,12 +3,16 @@
 import streamlit as st
 import pandas as pd
 from datetime import datetime
+import math
 from components.layout.MetricsSummary import MetricsSummary
 from components.filters.KeywordFilter import KeywordFilter, build_keyword_query
 from components.filters.TableFilter import filter_projects
 from components.tables.ProjectsTable import ProjectsTable
 from state.session import SessionState
 from services.database.mongodb import MongoDBService
+from services.analytics.period_analysis import PeriodAnalysisService
+from services.analytics.company_projects import CompanyProjectsService
+from services.analytics.subdept_projects import display_subdepartment_distribution
 
 st.set_page_config(layout="wide")
 
@@ -143,6 +147,114 @@ def ProjectSearch():
                 st.markdown(f"{idx+1}. **{dept}**  \n"
                           f"{count} projects")
         
+        st.markdown("---")
+
+        st.markdown("### Sub-department Analysis")
+
+        # Display the new sub-department distribution
+        display_subdepartment_distribution(filtered_df)
+
+        # Period Analysis Section
+        st.markdown("### 📈 Period Analysis")
+
+        metric = st.selectbox(
+            "Select Metric",
+            options=['project_value', 'project_count'],
+            format_func=lambda x: "Project Value" if x == "project_value" else "Project Count",
+            key="metric"
+        )
+
+        try:
+            # Calculate period analysis for all periods
+            results = PeriodAnalysisService.analyze_all_periods(
+                display_df,
+                metric=metric
+            )
+            
+            # Create visualization
+            fig = PeriodAnalysisService.create_combined_chart(results, metric)
+            st.plotly_chart(fig, use_container_width=True)
+            
+            # Display summary in columns
+            st.markdown("#### Summary")
+            cols = st.columns(4)
+            for idx, (period_name, (_, summary)) in enumerate(results.items()):
+                with cols[idx]:
+                    formatter = summary['formatter']
+                    st.markdown(f"""
+                    **{period_name}**  
+                    Current: {formatter(summary['current_value'])}  
+                    Change: {summary['change_percentage']:.1f}%  
+                    ({summary['trend']})
+                    """)
+
+        except Exception as e:
+            st.error(f"Error performing period analysis: {str(e)}")
+
+        st.markdown("---")
+
+        st.markdown("### 📊 Company Project Distribution by Value Range")
+
+        try:
+            # Prepare data for all ranges
+            range_data = CompanyProjectsService.prepare_data(display_df)
+            
+            # Show statistics in columns
+            st.markdown("#### Distribution Statistics")
+            stats = CompanyProjectsService.get_range_statistics(range_data)
+            
+            # Calculate optimal column layout (3 stats per row)
+            num_stats = len(stats)
+            stats_per_row = 3
+            num_rows = math.ceil(num_stats / stats_per_row)
+            
+            # Display statistics in rows
+            for row in range(num_rows):
+                start_idx = row * stats_per_row
+                end_idx = min(start_idx + stats_per_row, num_stats)
+                row_stats = stats[start_idx:end_idx]
+                
+                # Create columns for this row
+                cols = st.columns(stats_per_row)
+                
+                # Fill columns with stats
+                for col_idx, stat in enumerate(row_stats):
+                    with cols[col_idx]:
+                        st.markdown(
+                            f"""<div style='padding: 10px; border-radius: 5px; background-color: {stat['color']}20;'>
+                            <h4>{stat['range']}</h4>
+                            Projects: {stat['total_projects']:,}<br>
+                            Companies: {stat['total_companies']:,}<br>
+                            Total Value: ฿{stat['total_value']:.1f}M<br>
+                            Avg Value: ฿{stat['avg_value']:.1f}M
+                            </div>""",
+                            unsafe_allow_html=True
+                        )
+                
+                # Add empty columns if needed to complete the row
+                remaining_cols = stats_per_row - len(row_stats)
+                if remaining_cols > 0:
+                    for _ in range(remaining_cols):
+                        with cols[-(remaining_cols)]:
+                            st.empty()
+            
+            # Create individual charts
+            st.markdown("#### Project Distribution")
+            for value_range in CompanyProjectsService.VALUE_RANGES:
+                range_name = value_range['name']
+                if range_name in range_data:
+                    fig = CompanyProjectsService.create_chart_for_range(
+                        range_data[range_name],
+                        range_name,
+                        value_range['color']
+                    )
+                    st.plotly_chart(fig, use_container_width=True)
+                    st.markdown("---")
+            
+        except Exception as e:
+            st.error(f"Error creating company distribution charts: {str(e)}")
+            st.exception(e)  # This will show the full traceback in development
+
         st.markdown("---")
         
         # Display results table with built-in search and sorting
