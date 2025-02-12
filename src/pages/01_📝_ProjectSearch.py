@@ -8,6 +8,8 @@ from components.layout.MetricsSummary import MetricsSummary
 from components.filters.KeywordFilter import KeywordFilter, build_keyword_query
 from components.filters.TableFilter import filter_projects
 from components.tables.ProjectsTable import ProjectsTable
+from components.layout.SaveCollection import SaveCollection
+from components.layout.ContextSelector import ContextSelector
 from state.session import SessionState
 from services.database.mongodb import MongoDBService
 from services.analytics.period_analysis import PeriodAnalysisService
@@ -18,6 +20,8 @@ st.set_page_config(layout="wide")
 
 def ProjectSearch():
     """Project search page with keyword filtering and secondary filtering"""
+    ContextSelector()
+
     # Initialize session state
     SessionState.initialize_state()
     
@@ -265,7 +269,7 @@ def ProjectSearch():
             show_search=True,
             key_prefix="search_results_"
         )
-        
+
         # Add export functionality
         if st.button("📥 Export to CSV", key="export_results"):
             # Prepare export data

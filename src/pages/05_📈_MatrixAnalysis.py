@@ -4,6 +4,8 @@ import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
 from special_functions.context_util import get_analysis_data, show_context_info
+from services.analytics.price_cut_trend import PriceCutAnalysis
+from components.layout.ContextSelector import ContextSelector
 
 def create_heatmap(df: pd.DataFrame, metric: str):
     value_bands = [
@@ -75,6 +77,8 @@ def create_heatmap(df: pd.DataFrame, metric: str):
 
 def CompanyAnalysis():
     st.set_page_config(layout="wide")
+    ContextSelector()
+
     st.title("📊 Company Project Analysis")
     
     df, context_source = get_analysis_data()
@@ -92,6 +96,9 @@ def CompanyAnalysis():
         fig = create_heatmap(df, 'Total Value')
         st.plotly_chart(fig, use_container_width=True)
         
+        PriceCutAnalysis(df)
+
+        st.markdown("---")
     else:
         st.info("Please add collections to the context to perform analysis.")
 

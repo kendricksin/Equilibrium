@@ -6,12 +6,15 @@ import plotly.graph_objects as go
 from components.layout.MetricsSummary import MetricsSummary
 from state.session import SessionState
 from special_functions.context_util import get_analysis_data, show_context_info
+from components.layout.ContextSelector import ContextSelector
 
 st.set_page_config(layout="wide")
 
 def StackedCompany():
+    ContextSelector()
+
     SessionState.initialize_state()
-    
+
     # Show context information if available
     show_context_info()
     

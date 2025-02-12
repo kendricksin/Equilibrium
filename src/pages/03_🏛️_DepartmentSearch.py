@@ -7,6 +7,7 @@ import math
 from components.layout.MetricsSummary import MetricsSummary
 from components.filters.TableFilter import filter_projects
 from components.tables.ProjectsTable import ProjectsTable
+from components.layout.ContextSelector import ContextSelector
 from state.session import SessionState
 from services.database.mongodb import MongoDBService
 from services.analytics.period_analysis import PeriodAnalysisService
@@ -22,6 +23,8 @@ st.set_page_config(layout="wide")
 
 def DepartmentSearch():
     """Department search page with multi-department selection and secondary filtering"""
+    ContextSelector()
+
     # Initialize session state
     SessionState.initialize_state()
     

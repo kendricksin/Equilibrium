@@ -6,6 +6,7 @@ from services.database.mongodb import MongoDBService
 from components.filters.TableFilter import filter_projects
 from components.layout.MetricsSummary import MetricsSummary
 from components.tables.ProjectsTable import ProjectsTable
+from components.layout.ContextSelector import ContextSelector
 from services.analytics.period_analysis import PeriodAnalysisService
 from services.analytics.company_projects import CompanyProjectsService
 from state.session import SessionState
@@ -52,6 +53,8 @@ def get_company_options():
 
 def CompanySearch():
     """Company search and analysis page"""
+    ContextSelector()
+
     # Initialize session state
     SessionState.initialize_state()
     

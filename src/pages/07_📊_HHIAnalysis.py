@@ -4,6 +4,7 @@ import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
 from components.layout.MetricsSummary import create_distribution_bar
+from components.layout.ContextSelector import ContextSelector
 from state.session import SessionState
 from special_functions.context_util import get_analysis_data, show_context_info
 from services.analytics.company_comparison import CompanyComparisonService
@@ -82,6 +83,8 @@ def get_distribution_data(df, company, column):
     return distribution_pct
 
 def HHIAnalysis():
+    ContextSelector()
+
     SessionState.initialize_state()
     
     st.title("Market Concentration Analysis (HHI)")

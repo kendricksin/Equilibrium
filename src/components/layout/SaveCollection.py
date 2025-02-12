@@ -9,15 +9,17 @@ from services.database.collections_manager import save_collection
 def SaveCollection(
     df: pd.DataFrame,
     source: str,
-    key_prefix: str = ""
+    key_prefix: str = "",
+    allow_use_collection: bool = True
 ):
     """
-    Component for saving dataframes as collections to local storage
+    Enhanced component for saving dataframes as collections with option to use immediately
     
     Args:
         df (pd.DataFrame): DataFrame to save
         source (str): Source of the data (e.g., 'project_search', 'company_comparison')
         key_prefix (str): Prefix for component keys
+        allow_use_collection (bool): Whether to show "Save and Use" option
     """
     with st.expander("💾 Save as Collection"):
         # Show expiry info
@@ -51,17 +53,28 @@ def SaveCollection(
             st.markdown(f"**Columns:** {len(df.columns):,}")
             st.markdown(f"**Expires:** {(datetime.now() + timedelta(days=30)).strftime('%Y-%m-%d')}")
             
+            # Action buttons
             save_button = st.button(
                 "Save Collection",
                 type="primary",
                 key=f"{key_prefix}save_collection",
                 use_container_width=True
             )
+            
+            if allow_use_collection:
+                save_and_use = st.button(
+                    "Save & Use Collection",
+                    type="secondary",
+                    key=f"{key_prefix}save_and_use",
+                    use_container_width=True
+                )
+            else:
+                save_and_use = False
         
-        if save_button:
+        if save_button or save_and_use:
             if not name:
                 st.error("Please enter a collection name")
-                return
+                return None
                 
             try:
                 # Restore original values before saving
@@ -79,10 +92,33 @@ def SaveCollection(
                 ] if tags else []
                 
                 # Save collection
-                if save_collection(df, name, description, tag_list, source):
+                collection_info = save_collection(save_df, name, description, tag_list, source)
+                if collection_info:
                     st.success(f"Collection '{name}' saved successfully!")
+                    
+                    # Handle "Save and Use" functionality
+                    if save_and_use:
+                        # Initialize session state if needed
+                        if 'context_collections' not in st.session_state:
+                            st.session_state.context_collections = []
+                        if 'context_df' not in st.session_state:
+                            st.session_state.context_df = None
+                            
+                        # Add to context
+                        st.session_state.context_collections.append(collection_info)
+                        if st.session_state.context_df is None:
+                            st.session_state.context_df = df
+                        else:
+                            st.session_state.context_df = pd.concat(
+                                [st.session_state.context_df, df],
+                                ignore_index=True
+                            )
+                        st.success("Collection added to analysis context!")
+                        return collection_info
                 else:
                     st.error(f"Collection '{name}' already exists")
                 
             except Exception as e:
                 st.error(f"Error saving collection: {str(e)}")
+            
+            return None
