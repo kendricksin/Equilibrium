@@ -100,7 +100,7 @@ class TableFilter:
         selected_range = col.selectbox(
             "Quick Select",
             options=list(self.DATE_RANGES.keys()),
-            index=3,  # Default to 3 Years
+            index=4,  # Default to All Time
             key=f"{self.key_prefix}quick_date_range"
         )
         
@@ -251,19 +251,19 @@ class TableFilter:
         
         col.markdown("**Procurement Method Filter**")
         
-        # Find e-bidding option if it exists
-        ebidding_key = next(
-            (key for key in method_options.keys() 
-             if "e-bidding" in key.lower() or "ประกวดราคาอิเล็กทรอนิกส์" in key),
-            None
-        )
+        # # Find e-bidding option if it exists
+        # ebidding_key = next(
+        #     (key for key in method_options.keys() 
+        #      if "e-bidding" in key.lower() or "ประกวดราคาอิเล็กทรอนิกส์" in key),
+        #     None
+        # )
         
-        # Set default selection
-        if f"{self.key_prefix}procurement_methods" not in st.session_state:
-            if ebidding_key:
-                st.session_state[f"{self.key_prefix}procurement_methods"] = [ebidding_key]
-            elif method_options:
-                st.session_state[f"{self.key_prefix}procurement_methods"] = [list(method_options.keys())[0]]
+        # # Set default selection
+        # if f"{self.key_prefix}procurement_methods" not in st.session_state:
+        #     if ebidding_key:
+        #         st.session_state[f"{self.key_prefix}procurement_methods"] = [ebidding_key]
+        #     elif method_options:
+        #         st.session_state[f"{self.key_prefix}procurement_methods"] = [list(method_options.keys())[0]]
         
         selected_labels = col.multiselect(
             "Select Procurement Methods",

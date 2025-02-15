@@ -260,7 +260,7 @@ def ProjectSearch():
             st.exception(e)  # This will show the full traceback in development
 
         st.markdown("---")
-        
+
         # Display results table with built-in search and sorting
         st.markdown(f"### Search Results ({len(display_df):,} projects)")
         ProjectsTable(

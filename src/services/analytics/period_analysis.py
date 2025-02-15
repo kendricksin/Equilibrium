@@ -27,8 +27,8 @@ class PeriodAnalysisService:
     def analyze_all_periods(df: pd.DataFrame, metric: str) -> Dict[str, Tuple[pd.DataFrame, Dict[str, Any]]]:
         """Analyze data for all period types"""
         periods = {
-            'Weekly': 'W',
-            'Monthly': 'M',
+            # 'Weekly': 'W',
+            # 'Monthly': 'M',
             'Quarterly': 'Q',
             'Yearly': 'Y'
         }
