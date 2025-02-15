@@ -9,7 +9,12 @@ from services.cache.department_cache import get_departments, get_department_stat
 from state.session import SessionState
 import logging
 
-st.set_page_config(layout="wide")
+st.set_page_config(
+    page_title="Bid Lens AI",  # Browser tab title
+    page_icon="🔍",  # Can be an emoji or path to .ico file
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
 
 logging.basicConfig(
     level=logging.INFO,
