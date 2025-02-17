@@ -1,44 +1,47 @@
-# src/components/tables/ProjectsTable.py
-
 import streamlit as st
 import pandas as pd
 from typing import Dict, Optional, Any
-from components.layout.SaveCollection import SaveCollection
+from datetime import datetime
 
 def ProjectsTable(
     df: pd.DataFrame,
     filters: Optional[Dict[str, Any]] = None,
     show_search: bool = True,
-    show_save_collection: bool = True,  # New parameter
+    show_save_collection: bool = True,
     key_prefix: str = ""
 ):
     """
-    A component that displays project information in a table format.
+    A Streamlit-native projects table component with built-in search and filtering.
     
     Args:
         df (pd.DataFrame): DataFrame containing project data
         filters (Optional[Dict[str, Any]]): Optional filters to apply
         show_search (bool): Whether to show search and sort controls
-        show_save_collection (bool): Whether to show the Save Collection expander
+        show_save_collection (bool): Whether to show save collection option
         key_prefix (str): Prefix for component keys
     """
     # Create a copy of the DataFrame for filtering
     display_df = df.copy()
     
-    # Convert values to millions
-    display_df['sum_price_agree'] = df['sum_price_agree'] / 1e6
-    display_df['price_build'] = df['price_build'] / 1e6
+    # Convert values to millions for display
+    if 'sum_price_agree' in display_df.columns:
+        display_df['sum_price_agree'] = df['sum_price_agree'] / 1e6
+    if 'price_build' in display_df.columns:
+        display_df['price_build'] = df['price_build'] / 1e6
     
     # Calculate price cut percentage
-    display_df['price_cut'] = ((df['sum_price_agree'] / df['price_build'] - 1) * 100).round(2)
+    if 'sum_price_agree' in df.columns and 'price_build' in df.columns:
+        display_df['price_cut'] = ((df['sum_price_agree'] / df['price_build'] - 1) * 100).round(2)
 
     if show_search:
+        # Create search and sort controls in columns
         col1, col2 = st.columns([3, 1])
         
         with col1:
             search_term = st.text_input(
                 "🔍 Search projects",
-                key=f"{key_prefix}project_search"
+                key=f"{key_prefix}project_search",
+                placeholder="Search by project name or company"
             ).lower()
             
             if search_term:
@@ -61,7 +64,7 @@ def ProjectsTable(
                 key=f"{key_prefix}project_sort"
             )
             
-            # Sort using numerical values before formatting
+            # Apply sorting
             if sort_by == "Date (Newest)":
                 display_df = display_df.sort_values('transaction_date', ascending=False)
             elif sort_by == "Date (Oldest)":
@@ -75,13 +78,11 @@ def ProjectsTable(
             elif sort_by == "Price Cut (Lowest)":
                 display_df = display_df.sort_values('price_cut', ascending=True)
     
-    # Keep original numerical values for sorting
-    display_df['value_for_sort'] = display_df['sum_price_agree']
+    # Format dates
+    if 'transaction_date' in display_df.columns:
+        display_df['transaction_date'] = pd.to_datetime(display_df['transaction_date']).dt.strftime('%Y-%m-%d')
     
-    # Format dates and values for display
-    display_df['transaction_date'] = pd.to_datetime(display_df['transaction_date']).dt.strftime('%Y-%m-%d')
-    
-    # Display the table with numerical sorting
+    # Display the table using Streamlit's native dataframe
     st.dataframe(
         display_df[[
             'transaction_date',
@@ -130,12 +131,23 @@ def ProjectsTable(
         key=f"{key_prefix}projects_table"
     )
     
-    st.markdown(f"Showing {len(display_df)} projects")
+    # Show record count
+    st.markdown(f"Showing {len(display_df):,} projects")
 
-    # Only show SaveCollection if enabled
-    if show_save_collection:
-        SaveCollection(
-            df=display_df,
-            source="project_search",
-            key_prefix=f"{key_prefix}table_"
+    # Export functionality
+    if st.button("📥 Export to CSV", key=f"{key_prefix}export_button"):
+        # Generate filename with timestamp
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"projects_export_{timestamp}.csv"
+        
+        # Convert to CSV
+        csv = display_df.to_csv(index=False)
+        
+        # Create download button
+        st.download_button(
+            label="📥 Download CSV",
+            data=csv,
+            file_name=filename,
+            mime="text/csv",
+            key=f"{key_prefix}download_csv"
         )

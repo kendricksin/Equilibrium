@@ -1,30 +1,66 @@
 src/
-├── app.py                  # Main application entry point with department analysis
-├── components/            
-│   ├── filters/           # Filter-related components
-│   │   ├── KeywordFilter.py    # Keyword-based search with include/exclude functionality
-│   │   └── TableFilter.py      # Generic table filter utility for project data
-│   ├── layout/
-│   │   └── MetricsSummary.py   # Enhanced metrics summary with configurable styles
-│   └── tables/
-│       ├── CompanyTable.py     # Company information display with selection capability
-│       └── ProjectsTable.py    # Project information display with search/sort
-│
-├── pages/
-│   ├── ProjectSearch.py        # Project search page with keyword filtering
-│   └── CompanySearch.py        # Company search and comparison functionality
-│
+├── pages/                      # Streamlit pages
+│   ├── 01_🔍_ProjectSearch.py
+│   ├── 02_🏢_CompanySearch.py
+│   ├── 03_🏛️_DepartmentSearch.py
+│   ├── 04_📚_ContextManager.py
+│   ├── 05_📈_MatrixAnalysis.py
+│   ├── 06_📊_StackedCompany.py
+│   └── 07_📊_HHIAnalysis.py
 ├── services/
-│   ├── analytics/
-│   │   ├── company_comparison.py  # Service for analyzing and comparing companies
-│   │   └── treemap_service.py     # Service for creating treemap visualizations
-│   ├── cache/
-│   │   ├── cache_manager.py       # File-based caching management
-│   │   └── department_cache.py    # Department-specific caching service
-│   └── database/
-│       └── mongodb.py             # MongoDB service with connection management
-│
-└── state/
-    ├── data_state.py         # Application data state and caching management
-    ├── filters.py            # Filter state management and operations
-    └── session.py            # Streamlit session state management
+│   ├── database/              # Database services
+│   │   ├── postgres.py        # PostgreSQL connection & core queries
+│   │   └── migrations/        # SQL migration scripts
+│   ├── analytics/             # Analytics services
+│   │   ├── price_analysis.py
+│   │   ├── company_analysis.py
+│   │   ├── project_analysis.py
+│   │   └── department_analysis.py
+│   └── cache/                 # Caching services
+│       ├── cache_manager.py
+│       └── data_cache.py
+├── components/                # Reusable UI components
+│   ├── filters/
+│   │   ├── KeywordFilter.py
+│   │   └── TableFilter.py
+│   ├── tables/
+│   │   ├── ProjectsTable.py
+│   │   └── CompanyTable.py
+│   └── layout/
+│       ├── MetricsSummary.py
+│       └── ContextSelector.py
+└── utils/                     # Utility functions
+    ├── data_utils.py
+    └── visualization_utils.py
+
+
+src/
+└── services/
+    └── analytics/
+        ├── company_analysis.py        # Combined from company_comparison.py and company_projects.py
+        │   - Market share analysis
+        │   - Company competition metrics
+        │   - Project distribution analysis
+        │   - Company performance metrics
+        │
+        ├── price_analysis.py          # From price_cut_trend.py
+        │   - Price cut trends
+        │   - Value distribution analysis
+        │   - Price competition metrics
+        │
+        ├── project_analysis.py        # New consolidation of project-related analytics
+        │   - Project distribution
+        │   - Project timeline analysis
+        │   - Project type analysis
+        │   - Procurement method analysis
+        │
+        ├── department_analysis.py     # From subdept_projects.py
+        │   - Department distribution
+        │   - Sub-department analysis
+        │   - Department performance metrics
+        │
+        └── visualization.py           # From treemap_service.py and other visualization logic
+            - Treemap visualizations
+            - Heatmaps
+            - Network graphs
+            - Distribution charts

@@ -13,7 +13,7 @@ def SaveCollection(
     allow_use_collection: bool = True
 ):
     """
-    Enhanced component for saving dataframes as collections with option to use immediately
+    Streamlit component for saving dataframes as collections with option to use immediately
     
     Args:
         df (pd.DataFrame): DataFrame to save
@@ -21,41 +21,47 @@ def SaveCollection(
         key_prefix (str): Prefix for component keys
         allow_use_collection (bool): Whether to show "Save and Use" option
     """
-    with st.expander("💾 Save as Collection"):
-        # Show expiry info
-        st.info("Collections are automatically removed after 30 days")
-        
-        col1, col2 = st.columns([3, 1])
+    with st.expander("💾 Save as Collection", expanded=False):
+        # Collection metadata form
+        col1, col2 = st.columns([2, 1])
         
         with col1:
+            # Collection details
             name = st.text_input(
                 "Collection Name",
                 key=f"{key_prefix}collection_name",
-                placeholder="Enter a name for this collection"
+                placeholder="Enter a descriptive name",
+                help="Choose a unique name for this collection"
             )
             
             description = st.text_area(
                 "Description",
                 key=f"{key_prefix}collection_description",
-                placeholder="Describe what this collection contains"
+                placeholder="Describe what this collection contains",
+                help="Add details about what's included in this collection"
             )
             
-            # Tag input - comma separated
+            # Tags input with example
             tags = st.text_input(
-                "Tags (comma-separated)",
+                "Tags",
                 key=f"{key_prefix}collection_tags",
-                placeholder="tag1, tag2, tag3"
+                placeholder="tag1, tag2, tag3",
+                help="Comma-separated tags to help organize collections"
             )
-            
+        
         with col2:
+            # Collection summary
             st.markdown("#### Summary")
             st.markdown(f"**Rows:** {len(df):,}")
             st.markdown(f"**Columns:** {len(df.columns):,}")
-            st.markdown(f"**Expires:** {(datetime.now() + timedelta(days=30)).strftime('%Y-%m-%d')}")
             
-            # Action buttons
+            # Show expiry date
+            expiry_date = datetime.now() + timedelta(days=30)
+            st.markdown(f"**Expires:** {expiry_date.strftime('%Y-%m-%d')}")
+            
+            # Save buttons
             save_button = st.button(
-                "Save Collection",
+                "💾 Save Collection",
                 type="primary",
                 key=f"{key_prefix}save_collection",
                 use_container_width=True
@@ -63,49 +69,55 @@ def SaveCollection(
             
             if allow_use_collection:
                 save_and_use = st.button(
-                    "Save & Use Collection",
+                    "📌 Save & Use",
                     type="secondary",
                     key=f"{key_prefix}save_and_use",
-                    use_container_width=True
+                    use_container_width=True,
+                    help="Save collection and add to current context"
                 )
             else:
                 save_and_use = False
         
+        # Handle save actions
         if save_button or save_and_use:
             if not name:
                 st.error("Please enter a collection name")
                 return None
-                
+            
             try:
-                # Restore original values before saving
-                save_df = df.copy()
-                if 'sum_price_agree' in save_df.columns:
-                    save_df['sum_price_agree'] = save_df['sum_price_agree'] * 1e6
-                if 'price_build' in save_df.columns:
-                    save_df['price_build'] = save_df['price_build'] * 1e6
-                
                 # Process tags
-                tag_list = [
-                    tag.strip() 
-                    for tag in tags.split(",") 
-                    if tag.strip()
-                ] if tags else []
+                tag_list = [tag.strip() for tag in tags.split(",")] if tags else []
                 
                 # Save collection
-                collection_info = save_collection(save_df, name, description, tag_list, source)
-                if collection_info:
+                success = save_collection(
+                    df=df,
+                    name=name,
+                    description=description,
+                    tags=tag_list,
+                    source=source
+                )
+                
+                if success:
                     st.success(f"Collection '{name}' saved successfully!")
                     
-                    # Handle "Save and Use" functionality
+                    # Handle Save & Use
                     if save_and_use:
-                        # Initialize session state if needed
                         if 'context_collections' not in st.session_state:
                             st.session_state.context_collections = []
                         if 'context_df' not in st.session_state:
                             st.session_state.context_df = None
-                            
+                        
                         # Add to context
-                        st.session_state.context_collections.append(collection_info)
+                        st.session_state.context_collections.append({
+                            'name': name,
+                            'description': description,
+                            'tags': tag_list,
+                            'source': source,
+                            'created_at': datetime.now().isoformat(),
+                            'row_count': len(df)
+                        })
+                        
+                        # Update context DataFrame
                         if st.session_state.context_df is None:
                             st.session_state.context_df = df
                         else:
@@ -113,12 +125,12 @@ def SaveCollection(
                                 [st.session_state.context_df, df],
                                 ignore_index=True
                             )
-                        st.success("Collection added to analysis context!")
-                        return collection_info
+                        
+                        st.success("Added to analysis context!")
+                        st.rerun()
                 else:
-                    st.error(f"Collection '{name}' already exists")
-                
+                    st.error(f"A collection named '{name}' already exists")
+                    
             except Exception as e:
                 st.error(f"Error saving collection: {str(e)}")
-            
-            return None
+                return None

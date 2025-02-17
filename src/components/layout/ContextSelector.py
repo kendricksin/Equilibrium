@@ -1,10 +1,10 @@
 # src/components/layout/ContextSelector.py
 
 import streamlit as st
-from typing import Optional, List, Dict, Any
-from services.database.collections_manager import get_collections, get_collection_df, save_collection
 import pandas as pd
-from datetime import datetime, timedelta
+from typing import Optional, List, Dict, Any
+from datetime import datetime
+from services.database.collections_manager import get_collections, get_collection_df
 
 def handle_duplicate_projects(df: pd.DataFrame) -> pd.DataFrame:
     """Remove duplicate projects based on project_id if it exists"""
@@ -18,160 +18,131 @@ def get_current_results() -> Optional[pd.DataFrame]:
         df = st.session_state.filtered_results
         if isinstance(df, pd.DataFrame) and not df.empty:
             return df
-            
+    
     if 'search_results' in st.session_state:
         df = st.session_state.search_results
         if isinstance(df, pd.DataFrame) and not df.empty:
             return df
-            
+    
     return None
 
 def ContextSelector():
-    """Sidebar component for context selection and collection management"""
-    
+    """
+    Streamlit sidebar component for managing analysis context and collections
+    """
     # Initialize session state
     if 'context_collections' not in st.session_state:
         st.session_state.context_collections = []
     if 'context_df' not in st.session_state:
         st.session_state.context_df = None
-        
+    
     with st.sidebar:
         st.markdown("### 📚 Analysis Context")
         
-        # Display current context
+        # Display current context overview
         if st.session_state.context_df is not None:
             df = st.session_state.context_df
             deduped_df = handle_duplicate_projects(df.copy())
             
-            st.markdown(f"""
+            # Context metrics
+            st.info(f"""
             **Active Collections:** {len(st.session_state.context_collections)}  
-            **Projects:** {len(deduped_df):,}
+            **Total Projects:** {len(deduped_df):,}  
+            **Unique Companies:** {deduped_df['winner'].nunique():,}  
+            **Departments:** {deduped_df['dept_name'].nunique():,}
             """)
             
-            # Show collection names
+            # Show active collections
             if st.session_state.context_collections:
-                with st.expander("Active Collections", expanded=True):
-                    for coll in st.session_state.context_collections:
-                        st.markdown(f"- {coll['name']}")
+                with st.expander("📋 Active Collections", expanded=True):
+                    for collection in st.session_state.context_collections:
+                        st.markdown(f"""
+                        **{collection['name']}**  
+                        {collection['row_count']:,} projects
+                        """)
             
-            if st.button("🔄 Reset Context", key="sidebar_reset_context"):
+            # Reset context button
+            if st.button("🔄 Reset Context", use_container_width=True):
                 st.session_state.context_collections = []
                 st.session_state.context_df = None
                 st.rerun()
         
         st.divider()
         
-        # Save current results section (if results exist)
+        # Save current results section
         current_results = get_current_results()
         if current_results is not None:
             st.markdown("### 💾 Save Current Results")
             
-            # Collection name input
+            # Quick save form
             name = st.text_input(
                 "Collection Name",
-                key="sidebar_collection_name",
+                key="quick_save_name",
                 placeholder="Enter collection name"
             )
             
-            # Optional description
-            with st.expander("Add Description", expanded=False):
+            with st.expander("Add Details", expanded=False):
                 description = st.text_area(
                     "Description",
-                    key="sidebar_collection_desc",
+                    key="quick_save_desc",
                     placeholder="Describe this collection",
                     height=100
                 )
                 
                 tags = st.text_input(
-                    "Tags (comma-separated)",
-                    key="sidebar_collection_tags",
+                    "Tags",
+                    key="quick_save_tags",
                     placeholder="tag1, tag2, tag3"
                 )
             
+            # Save buttons
             col1, col2 = st.columns(2)
             with col1:
                 save_button = st.button(
-                    "Save",
+                    "💾 Save",
                     type="primary",
-                    key="sidebar_save",
+                    key="quick_save",
                     use_container_width=True
                 )
             with col2:
                 save_and_use = st.button(
-                    "Save & Use",
+                    "📌 Save & Use",
                     type="secondary",
-                    key="sidebar_save_use",
+                    key="quick_save_use",
                     use_container_width=True
                 )
-                
-            if save_button or save_and_use:
-                if not name:
-                    st.error("Please enter a collection name")
-                else:
-                    try:
-                        # Process tags
-                        tag_list = [tag.strip() for tag in tags.split(",")] if tags else []
-                        
-                        # Save collection
-                        collection_info = save_collection(
-                            current_results,
-                            name,
-                            description,
-                            tag_list,
-                            source="search_results"
-                        )
-                        
-                        if collection_info:
-                            st.success(f"Saved '{name}'")
-                            
-                            # Handle Save & Use
-                            if save_and_use:
-                                if collection_info['name'] not in [c['name'] for c in st.session_state.context_collections]:
-                                    st.session_state.context_collections.append(collection_info)
-                                    if st.session_state.context_df is None:
-                                        st.session_state.context_df = current_results
-                                    else:
-                                        combined_df = pd.concat(
-                                            [st.session_state.context_df, current_results],
-                                            ignore_index=True
-                                        )
-                                        st.session_state.context_df = handle_duplicate_projects(combined_df)
-                                    st.success("Added to context!")
-                                    st.rerun()
-                        else:
-                            st.error(f"Collection '{name}' already exists")
-                            
-                    except Exception as e:
-                        st.error(f"Error saving collection: {str(e)}")
-            
-            st.divider()
+        
+        st.divider()
         
         # Quick add existing collections
-        st.markdown("### Quick Add Collection")
+        st.markdown("### ➕ Quick Add Collection")
         
         # Get available collections
         collections = get_collections()
         available_collections = [
-            c for c in collections 
+            c for c in collections
             if c['name'] not in [x['name'] for x in st.session_state.context_collections]
         ]
         
         if available_collections:
             # Create formatted options
             collection_options = {
-                f"{c['name']} ({c['row_count']:,} projects)": c 
+                f"{c['name']} ({c['row_count']:,} projects)": c
                 for c in available_collections
             }
             
+            # Collection selector
             selected = st.selectbox(
                 "Select Collection",
                 options=[""] + list(collection_options.keys()),
-                key="sidebar_collection_select"
+                key="quick_add_collection",
+                help="Choose a collection to add to the current context"
             )
             
             if selected:
                 collection = collection_options[selected]
-                if st.button("➕ Add to Context", key="sidebar_add_context"):
+                if st.button("➕ Add to Context", use_container_width=True):
+                    # Load collection data
                     new_df = get_collection_df(collection['name'])
                     
                     if new_df is not None:
@@ -186,13 +157,12 @@ def ContextSelector():
                                 [st.session_state.context_df, new_df],
                                 ignore_index=True
                             )
-                            # Remove duplicates when combining
                             st.session_state.context_df = handle_duplicate_projects(combined_df)
                         
                         st.success(f"Added '{collection['name']}' to context")
                         st.rerun()
         else:
-            st.info("No collections available")
+            st.info("No collections available to add")
         
         # Link to context manager
         st.markdown("---")

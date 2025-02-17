@@ -3,94 +3,88 @@
 import streamlit as st
 import pandas as pd
 from datetime import datetime
-import math
 from components.layout.MetricsSummary import MetricsSummary
 from components.filters.TableFilter import filter_projects
 from components.tables.ProjectsTable import ProjectsTable
 from components.layout.ContextSelector import ContextSelector
-from state.session import SessionState
-from services.database.mongodb import MongoDBService
-from services.analytics.period_analysis import PeriodAnalysisService
-from services.analytics.company_projects import CompanyProjectsService
-from services.analytics.subdept_projects import display_subdepartment_distribution
-from services.cache.department_cache import (
-    get_departments,
-    get_department_stats,
-    get_subdepartment_stats
-)
-
-st.set_page_config(layout="wide")
+from components.layout.SaveCollection import SaveCollection
+from services.analytics.department_analysis import DepartmentAnalysisService
+from services.analytics.visualization import VisualizationService
+from services.analytics.price_analysis import PriceAnalysisService
 
 def DepartmentSearch():
-    """Department search page with multi-department selection and secondary filtering"""
+    """Enhanced department search and analysis page"""
+    st.set_page_config(layout="wide")
+    
+    # Initialize ContextSelector
     ContextSelector()
-
-    # Initialize session state
-    SessionState.initialize_state()
     
-    # Initialize MongoDB service
-    mongo_service = MongoDBService()
+    # Initialize services
+    dept_service = DepartmentAnalysisService()
+    viz_service = VisualizationService()
+    price_service = PriceAnalysisService()
     
-    # Get current filters from session state
-    filters = SessionState.get_filters()
+    st.title("🏛️ Department Analysis")
     
-    # Department selection section
-    st.markdown("### 🏢 Department Selection")
+    # Department Selection Section
+    st.markdown("### Department Selection")
     
-    # Get departments with cached statistics
-    dept_options = get_departments()
+    # Get department data and metadata
+    dept_data, metadata = dept_service.get_department_overview()
     
-    # Format department options to show stats
-    dept_display_options = []
-    dept_mapping = {}  # To map display strings back to department names
+    if not dept_data:
+        st.warning("No department data available for analysis")
+        return
     
-    for dept in dept_options:
-        stats = get_department_stats(dept)
-        if stats:
-            display_text = f"{dept} ({stats['count']:,} projects, ฿{stats['total_value_millions']:.1f}M)"
-            dept_display_options.append(display_text)
-            dept_mapping[display_text] = dept
+    # Show overall metrics
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.metric("Total Projects", f"{metadata['total_projects']:,}")
+    with col2:
+        st.metric("Total Value", f"฿{metadata['total_value']/1e9:.1f}B")
+    with col3:
+        st.metric("Departments", f"{metadata['unique_departments']:,}")
+    with col4:
+        st.metric("Companies", f"{metadata['unique_companies']:,}")
     
-    # Multi-select for departments with statistics
+    # Create formatted options for department selection
+    dept_options = {
+        f"{dept['department']} ({dept['count']:,} projects, ฿{dept['total_value_millions']:.1f}M)": dept['department']
+        for dept in dept_data
+    }
+    
+    # Department multi-select
     selected_display_depts = st.multiselect(
         "Select Departments",
-        options=dept_display_options,
-        key="department_select",
+        options=sorted(dept_options.keys()),
         help="Select one or more departments to analyze"
     )
     
-    # Convert display selections back to department names
-    selected_departments = [dept_mapping[display] for display in selected_display_depts]
+    selected_departments = [dept_options[display] for display in selected_display_depts]
     
-    # Sub-department selection (only show if departments are selected)
+    # Sub-department selection
     selected_subdepartments = []
     if selected_departments:
-        # Get sub-department stats for all selected departments
-        all_subdept_stats = {}
+        subdept_data = []
         for dept in selected_departments:
-            subdept_stats = get_subdepartment_stats(dept)
-            all_subdept_stats.update(subdept_stats)
+            subdepts = dept_service.get_subdepartment_analysis(dept)
+            if isinstance(subdepts, list):
+                subdept_data.extend(subdepts)
         
-        # Create formatted sub-department options
-        subdept_display_options = []
-        subdept_mapping = {}
-        
-        for subdept, stats in all_subdept_stats.items():
-            if pd.notna(subdept):  # Filter out NaN/None values
-                display_text = f"{subdept} ({stats['count']:,} projects, ฿{stats['total_value_millions']:.1f}M)"
-                subdept_display_options.append(display_text)
-                subdept_mapping[display_text] = subdept
-        
-        # Multi-select for sub-departments
-        selected_display_subdepts = st.multiselect(
-            "Select Sub-departments (Optional)",
-            options=sorted(subdept_display_options),
-            key="subdepartment_select",
-            help="Optionally select specific sub-departments to narrow your search"
-        )
-        
-        # Convert display selections back to sub-department names
-        selected_subdepartments = [subdept_mapping[display] for display in selected_display_subdepts]
+        if subdept_data:
+            subdept_options = {
+                f"{sub.get('subdepartment', 'Unknown')} ({sub.get('projects', 0):,} projects, ฿{sub.get('total_value_millions', 0):.1f}M)": sub.get('subdepartment')
+                for sub in subdept_data
+                if sub and sub.get('subdepartment') is not None
+            }
+            
+            selected_display_subdepts = st.multiselect(
+                "Select Sub-departments (Optional)",
+                options=sorted(subdept_options.keys()),
+                help="Optionally select specific sub-departments"
+            )
+            
+            selected_subdepartments = [subdept_options[display] for display in selected_display_subdepts]
     
     # Search and Clear buttons
     col1, col2 = st.columns([1, 5])
@@ -104,47 +98,31 @@ def DepartmentSearch():
     
     with col2:
         if st.button("❌ Clear Selection", use_container_width=True):
-            # Clear selections from session state
-            if "department_select" in st.session_state:
-                del st.session_state.department_select
-            if "subdepartment_select" in st.session_state:
-                del st.session_state.subdepartment_select
             st.session_state.department_results = None
             st.session_state.filtered_results = None
             st.rerun()
     
     # Process search
     if search_clicked and selected_departments:
-        with st.spinner("Searching departments..."):
-            try:
-                # Build department query
-                query = {"dept_name": {"$in": selected_departments}}
-                
-                # Add sub-department filter if selected
-                if selected_subdepartments:
-                    query["dept_sub_name"] = {"$in": selected_subdepartments}
-                
-                # Fetch results with limit
-                df = mongo_service.get_projects(
-                    query=query,
-                    max_documents=20000
-                )
-                
-                if df is not None and not df.empty:
-                    st.session_state.department_results = df
-                    st.session_state.filtered_results = None  # Reset filtered results
-                    st.rerun()
-                else:
-                    st.warning("No projects found for the selected departments.")
-                    
-            except Exception as e:
-                st.error(f"Error performing search: {str(e)}")
+        with st.spinner("Analyzing departments..."):
+            # Get projects by filtering in PostgreSQL
+            df = dept_service.get_department_projects(
+                departments=selected_departments,
+                subdepartments=selected_subdepartments
+            )
+            
+            if df is not None and not df.empty:
+                st.session_state.department_results = df
+                st.session_state.filtered_results = None
+                st.rerun()
+            else:
+                st.warning("No projects found for the selected departments.")
     
     # Display and filter results
-    if st.session_state.get('department_results') is not None:
+    if hasattr(st.session_state, 'department_results') and st.session_state.department_results is not None:
         df = st.session_state.department_results
         
-        # Apply secondary filters if results exist
+        # Apply secondary filters
         filtered_df = filter_projects(
             df,
             key_prefix="dept_secondary_",
@@ -153,18 +131,18 @@ def DepartmentSearch():
                 'value_unit': 1e6,
                 'value_label': 'Million Baht',
                 'expander_default': True,
-                'show_department_filter': False  # Hide department filter since we're already filtering by department
+                'show_department_filter': False
             }
         )
         st.session_state.filtered_results = filtered_df
         
-        # Use filtered results if available, otherwise use original results
+        # Use filtered results if available
         display_df = filtered_df if filtered_df is not None else df
         
-        # Display metrics for current view
+        # Display metrics summary
         MetricsSummary(display_df)
         
-        # Display quick stats using pre-aggregated data where possible
+        # Quick Statistics
         st.markdown("### 📊 Quick Statistics")
         
         col1, col2, col3 = st.columns(3)
@@ -172,12 +150,14 @@ def DepartmentSearch():
         with col1:
             st.markdown("**Department Overview**")
             for dept in selected_departments:
-                stats = get_department_stats(dept)
-                if stats:
-                    st.markdown(f"**{dept}**  \n"
-                              f"Projects: {stats['count']:,}  \n"
-                              f"Value: ฿{stats['total_value_millions']:.1f}M  \n"
-                              f"Companies: {stats['unique_companies']:,}")
+                dept_stats = next((d for d in dept_data if d['department'] == dept), None)
+                if dept_stats:
+                    st.markdown(f"""
+                    **{dept}**  
+                    Projects: {dept_stats['count']:,}  
+                    Value: ฿{dept_stats['total_value_millions']:.1f}M  
+                    Companies: {dept_stats['unique_companies']:,}
+                    """)
         
         with col2:
             st.markdown("**Top Companies**")
@@ -187,163 +167,70 @@ def DepartmentSearch():
             }).reset_index()
             
             top_companies = company_stats.nlargest(5, 'sum_price_agree')
-            for idx, row in top_companies.iterrows():
-                st.markdown(f"{idx+1}. **{row['winner']}**  \n"
-                          f"฿{row['sum_price_agree']/1e6:.1f}M ({row['project_name']} projects)")
+            for _, row in top_companies.iterrows():
+                st.markdown(f"""
+                **{row['winner']}**  
+                ฿{row['sum_price_agree']/1e6:.1f}M ({row['project_name']} projects)
+                """)
         
         with col3:
             st.markdown("**Procurement Methods**")
             method_stats = display_df.groupby('purchase_method_name')['project_name'].count()
-            method_stats = method_stats.nlargest(5)
-            
             total_projects = len(display_df)
-            for method, count in method_stats.items():
+            
+            for method, count in method_stats.nlargest(5).items():
                 if pd.notna(method):
                     percentage = (count / total_projects) * 100
-                    st.markdown(f"**{method}**  \n"
-                              f"{count:,} projects ({percentage:.1f}%)")
-        
-        st.markdown("---")
-
-        st.markdown("### Sub-department Analysis")
-
-        # Display the new sub-department distribution
-        display_subdepartment_distribution(filtered_df)
-
-        # Period Analysis Section
-        st.markdown("### 📈 Period Analysis")
-
-        metric = st.selectbox(
-            "Select Metric",
-            options=['project_value', 'project_count'],
-            format_func=lambda x: "Project Value" if x == "project_value" else "Project Count",
-            key="metric"
-        )
-
-        try:
-            # Calculate period analysis for all periods
-            results = PeriodAnalysisService.analyze_all_periods(
-                display_df,
-                metric=metric
-            )
-            
-            # Create visualization
-            fig = PeriodAnalysisService.create_combined_chart(results, metric)
-            st.plotly_chart(fig, use_container_width=True)
-            
-            # Display summary in columns
-            st.markdown("#### Summary")
-            cols = st.columns(4)
-            for idx, (period_name, (_, summary)) in enumerate(results.items()):
-                with cols[idx]:
-                    formatter = summary['formatter']
                     st.markdown(f"""
-                    **{period_name}**  
-                    Current: {formatter(summary['current_value'])}  
-                    Change: {summary['change_percentage']:.1f}%  
-                    ({summary['trend']})
+                    **{method}**  
+                    {count:,} projects ({percentage:.1f}%)
                     """)
-
-        except Exception as e:
-            st.error(f"Error performing period analysis: {str(e)}")
-
-        st.markdown("---")
-
-        st.markdown("### 📊 Company Project Distribution by Value Range")
-
-        try:
-            # Prepare data for all ranges
-            range_data = CompanyProjectsService.prepare_data(display_df)
-            
-            # Show statistics in columns
-            st.markdown("#### Distribution Statistics")
-            stats = CompanyProjectsService.get_range_statistics(range_data)
-            
-            # Calculate optimal column layout (3 stats per row)
-            num_stats = len(stats)
-            stats_per_row = 3
-            num_rows = math.ceil(num_stats / stats_per_row)
-            
-            # Display statistics in rows
-            for row in range(num_rows):
-                start_idx = row * stats_per_row
-                end_idx = min(start_idx + stats_per_row, num_stats)
-                row_stats = stats[start_idx:end_idx]
-                
-                # Create columns for this row
-                cols = st.columns(stats_per_row)
-                
-                # Fill columns with stats
-                for col_idx, stat in enumerate(row_stats):
-                    with cols[col_idx]:
-                        st.markdown(
-                            f"""<div style='padding: 10px; border-radius: 5px; background-color: {stat['color']}20;'>
-                            <h4>{stat['range']}</h4>
-                            Projects: {stat['total_projects']:,}<br>
-                            Companies: {stat['total_companies']:,}<br>
-                            Total Value: ฿{stat['total_value']:.1f}M<br>
-                            Avg Value: ฿{stat['avg_value']:.1f}M
-                            </div>""",
-                            unsafe_allow_html=True
-                        )
-                
-                # Add empty columns if needed to complete the row
-                remaining_cols = stats_per_row - len(row_stats)
-                if remaining_cols > 0:
-                    for _ in range(remaining_cols):
-                        with cols[-(remaining_cols)]:
-                            st.empty()
-            
-            # Create individual charts
-            st.markdown("#### Project Distribution")
-            for value_range in CompanyProjectsService.VALUE_RANGES:
-                range_name = value_range['name']
-                if range_name in range_data:
-                    fig = CompanyProjectsService.create_chart_for_range(
-                        range_data[range_name],
-                        range_name,
-                        value_range['color']
-                    )
-                    st.plotly_chart(fig, use_container_width=True)
-                    st.markdown("---")
-            
-        except Exception as e:
-            st.error(f"Error creating company distribution charts: {str(e)}")
-            st.exception(e)  # This will show the full traceback in development
-
+        
         st.markdown("---")
         
-        # Display results table with built-in search and sorting
+        # Price Analysis Section
+        st.markdown("### 💰 Price Analysis")
+        
+        price_metrics = price_service.get_price_distribution()
+        fig = viz_service.create_dual_axis_chart(
+            df=price_metrics,
+            x_col='range',
+            y1_col='total_value',
+            y2_col='avg_cut',
+            y1_label='Total Value (M฿)',
+            y2_label='Average Price Cut (%)',
+            title='Price Distribution and Price Cuts by Value Range'
+        )
+        st.plotly_chart(fig, use_container_width=True)
+        
+        # Project Timeline
+        st.markdown("### 📅 Project Timeline")
+        
+        timeline_data = dept_service.get_project_timeline(display_df)
+        fig = viz_service.create_time_series(
+            df=timeline_data,
+            x_col='period',
+            y_cols=['project_count', 'total_value'],
+            labels=['Number of Projects', 'Total Value (M฿)'],
+            title='Project Timeline'
+        )
+        st.plotly_chart(fig, use_container_width=True)
+        
+        # Results Table
         st.markdown(f"### Department Projects ({len(display_df):,} projects)")
         ProjectsTable(
             df=display_df,
-            filters=filters,
             show_search=True,
             key_prefix="dept_results_"
         )
         
-        # Add export functionality
-        if st.button("📥 Export to CSV", key="export_dept_results"):
-            # Prepare export data
-            export_df = display_df.copy()
-            export_df['transaction_date'] = export_df['transaction_date'].dt.strftime('%Y-%m-%d')
-            
-            # Generate filename with department names
-            dept_names = "_".join(selected_departments)[:50]  # Limit length
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = f"dept_{dept_names}_{timestamp}.csv"
-            
-            # Convert to CSV
-            csv = export_df.to_csv(index=False)
-            
-            # Create download button
-            st.download_button(
-                label="📥 Download CSV",
-                data=csv,
-                file_name=filename,
-                mime="text/csv",
-                key="download_dept_results"
-            )
+        # Save Collection option
+        SaveCollection(
+            df=display_df,
+            source="department_search",
+            key_prefix="dept_"
+        )
+        
     else:
         st.info("Select one or more departments above and click Search to find projects.")
 
