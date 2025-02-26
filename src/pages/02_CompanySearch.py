@@ -1,5 +1,3 @@
-# src/pages/CompanySearch.py
-
 import streamlit as st
 import pandas as pd
 from datetime import datetime
@@ -7,10 +5,7 @@ import logging
 from services.database.mongodb import MongoDBService
 from typing import List, Dict, Any, Optional
 import plotly.graph_objects as go
-from analytics.company.comparison import CompanyAnalytics
-from components.charts.ComparisonChart import ComparisonChart
-from components.tables.DataTable import DataTable
-from utils.formatters import format_currency
+from components.layout.SaveCollection import SaveCollection
 
 logger = logging.getLogger(__name__)
 
@@ -430,6 +425,13 @@ def CompanySearch():
                         key_prefix="company_comparison_"
                     )
                     
+                    # Display the save collection component
+                    SaveCollection(
+                        df=df,
+                        source="company_comparison",  # Source identifier
+                        key_prefix="company_comparison_"   # Unique prefix for component keys
+                    )
+
                     # Export functionality
                     col1, col2, col3 = st.columns([2,2,1])
                     with col1:

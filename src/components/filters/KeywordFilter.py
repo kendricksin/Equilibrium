@@ -1,167 +1,148 @@
 # src/components/filters/KeywordFilter.py
 
 import streamlit as st
-from typing import List, Dict, Any, Optional
+from typing import List, Tuple, Dict
 import re
-import logging
 
-logger = logging.getLogger(__name__)
+def KeywordFilter(
+    current_include_all: List[str] = None,
+    current_include_any: List[str] = None,
+    current_exclude: List[str] = None,
+    key_prefix: str = ""
+) -> Tuple[List[str], List[str], List[str]]:
+    """
+    Enhanced component for keyword-based search with include-all/include-any/exclude functionality.
+    
+    Args:
+        current_include_all (List[str]): Currently included keywords (must have all)
+        current_include_any (List[str]): Currently included keywords (must have any)
+        current_exclude (List[str]): Currently excluded keywords
+        key_prefix (str): Prefix for component keys
+        
+    Returns:
+        Tuple[List[str], List[str], List[str]]: Lists of included-all, included-any, and excluded keywords
+    """
+    if current_include_all is None:
+        current_include_all = []
+    if current_include_any is None:
+        current_include_any = []
+    if current_exclude is None:
+        current_exclude = []
+        
+    st.markdown("### 🔍 Keyword Search")
+    
+    # Include ALL keywords
+    include_all_input = st.text_area(
+        "Must include ALL these keywords (one per line)",
+        value="\n".join(current_include_all),
+        height=80,
+        help="Enter keywords that MUST ALL be present. Projects must contain ALL these keywords.",
+        key=f"{key_prefix}include_all_keywords"
+    )
+    
+    # Include ANY keywords
+    include_any_input = st.text_area(
+        "Must include ANY of these keywords (one per line)",
+        value="\n".join(current_include_any),
+        height=80,
+        help="Enter keywords where at least ONE must be present. Projects must contain AT LEAST ONE of these keywords.",
+        key=f"{key_prefix}include_any_keywords"
+    )
+    
+    # Exclude keywords
+    exclude_input = st.text_area(
+        "Exclude keywords (one per line)",
+        value="\n".join(current_exclude),
+        height=80,
+        help="Enter keywords to exclude. Projects containing ANY of these keywords will be excluded.",
+        key=f"{key_prefix}exclude_keywords"
+    )
+    
+    # Process inputs
+    include_all_keywords = [
+        keyword.strip() 
+        for keyword in include_all_input.split("\n") 
+        if keyword.strip()
+    ]
+    
+    include_any_keywords = [
+        keyword.strip() 
+        for keyword in include_any_input.split("\n") 
+        if keyword.strip()
+    ]
+    
+    exclude_keywords = [
+        keyword.strip() 
+        for keyword in exclude_input.split("\n") 
+        if keyword.strip()
+    ]
+    
+    return include_all_keywords, include_any_keywords, exclude_keywords
 
-class KeywordFilter:
-    """Enhanced keyword filter component with include/exclude functionality"""
+def build_keyword_query(include_all_keywords: List[str], include_any_keywords: List[str], exclude_keywords: List[str]) -> Dict:
+    """
+    Build MongoDB query for keyword search with include-all/include-any/exclude functionality
     
-    def __init__(
-        self,
-        key_prefix: str = "",
-        config: Optional[Dict[str, Any]] = None
-    ):
-        """
-        Initialize KeywordFilter
+    Args:
+        include_all_keywords (List[str]): Keywords that must ALL be present
+        include_any_keywords (List[str]): Keywords where at least one must be present
+        exclude_keywords (List[str]): Keywords to exclude
         
-        Args:
-            key_prefix: Prefix for component keys
-            config: Filter configuration
-        """
-        self.key_prefix = key_prefix
-        self.config = self._get_default_config()
-        if config:
-            self.config.update(config)
+    Returns:
+        Dict: MongoDB query
+    """
+    query = {}
+    conditions = []
     
-    def _get_default_config(self) -> Dict[str, Any]:
-        """Get default configuration"""
-        return {
-            'min_keyword_length': 2,
-            'max_keywords': 10,
-            'case_sensitive': False,
-            'show_advanced': True,
-            'default_search_fields': ['project_name', 'winner', 'dept_name']
-        }
+    # Build include ALL conditions
+    if include_all_keywords:
+        for keyword in include_all_keywords:
+            pattern = re.compile(f".*{re.escape(keyword)}.*", re.IGNORECASE)
+            conditions.append({
+                "$or": [
+                    {"project_name": pattern},
+                    {"project_detail": pattern},
+                    {"winner": pattern}
+                ]
+            })
     
-    def render(
-        self,
-        search_fields: Optional[List[str]] = None
-    ) -> Dict[str, Any]:
-        """
-        Render keyword filter controls
+    # Build include ANY conditions
+    if include_any_keywords:
+        any_conditions = []
+        for keyword in include_any_keywords:
+            pattern = re.compile(f".*{re.escape(keyword)}.*", re.IGNORECASE)
+            any_conditions.append({
+                "$or": [
+                    {"project_name": pattern},
+                    {"project_detail": pattern},
+                    {"winner": pattern}
+                ]
+            })
         
-        Args:
-            search_fields: Optional list of fields to search
-            
-        Returns:
-            Dictionary of filter parameters
-        """
-        filter_params = {
-            'include_keywords': [],
-            'exclude_keywords': [],
-            'search_fields': search_fields or self.config['default_search_fields'],
-            'case_sensitive': False
-        }
-        
-        # Main keyword input
-        keywords = st.text_input(
-            "🔍 Search Keywords",
-            key=f"{self.key_prefix}_keywords",
-            help="Enter keywords separated by spaces. Use - before a word to exclude it."
-        )
-        
-        # Advanced options
-        if self.config['show_advanced']:
-            with st.expander("Advanced Search Options"):
-                # Case sensitivity
-                filter_params['case_sensitive'] = st.checkbox(
-                    "Case Sensitive",
-                    key=f"{self.key_prefix}_case_sensitive"
-                )
-                
-                # Search fields selection
-                if search_fields:
-                    # Create a mapping for display names
-                    field_display_names = {
-                        'project_name': 'Project Name',
-                        'winner': 'Company',
-                        'dept_name': 'Department',
-                        'purchase_method_name': 'Purchase Method'
-                    }
-                    
-                    filter_params['search_fields'] = st.multiselect(
-                        "Search Fields",
-                        options=search_fields,
-                        default=filter_params['search_fields'],
-                        format_func=lambda x: field_display_names.get(x, x),
-                        key=f"{self.key_prefix}_fields"
-                    )
-        
-        # Process keywords
-        if keywords:
-            words = keywords.split()
-            for word in words:
-                if len(word) >= self.config['min_keyword_length']:
-                    if word.startswith('-'):
-                        filter_params['exclude_keywords'].append(word[1:])
-                    else:
-                        filter_params['include_keywords'].append(word)
-            
-            # Validate keyword count
-            total_keywords = len(filter_params['include_keywords']) + \
-                           len(filter_params['exclude_keywords'])
-            if total_keywords > self.config['max_keywords']:
-                st.warning(f"Maximum {self.config['max_keywords']} keywords allowed")
-                return None
-        
-        return filter_params
+        if any_conditions:
+            conditions.append({"$or": any_conditions})
     
-    def build_query(self, filter_params: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Build MongoDB query from filter parameters
+    # Build exclude conditions
+    if exclude_keywords:
+        exclude_patterns = [
+            re.compile(f".*{re.escape(keyword)}.*", re.IGNORECASE)
+            for keyword in exclude_keywords
+        ]
+        conditions.append({
+            "$nor": [
+                {
+                    "$or": [
+                        {"project_name": pattern},
+                        {"project_detail": pattern},
+                        {"winner": pattern}
+                    ]
+                }
+                for pattern in exclude_patterns
+            ]
+        })
+    
+    # Combine conditions
+    if conditions:
+        query["$and"] = conditions
         
-        Args:
-            filter_params: Filter parameters from render()
-            
-        Returns:
-            MongoDB query dictionary
-        """
-        try:
-            if not filter_params:
-                return {}
-            
-            query = {"$and": []}
-            
-            # Include keywords
-            if filter_params['include_keywords']:
-                include_conditions = []
-                for field in filter_params['search_fields']:
-                    for keyword in filter_params['include_keywords']:
-                        pattern = re.escape(keyword)
-                        if not filter_params['case_sensitive']:
-                            include_conditions.append({
-                                field: {"$regex": pattern, "$options": "i"}
-                            })
-                        else:
-                            include_conditions.append({
-                                field: {"$regex": pattern}
-                            })
-                if include_conditions:
-                    query["$and"].append({"$or": include_conditions})
-            
-            # Exclude keywords
-            if filter_params['exclude_keywords']:
-                exclude_conditions = []
-                for field in filter_params['search_fields']:
-                    for keyword in filter_params['exclude_keywords']:
-                        pattern = re.escape(keyword)
-                        if not filter_params['case_sensitive']:
-                            exclude_conditions.append({
-                                field: {"$not": {"$regex": pattern, "$options": "i"}}
-                            })
-                        else:
-                            exclude_conditions.append({
-                                field: {"$not": {"$regex": pattern}}
-                            })
-                if exclude_conditions:
-                    query["$and"].extend(exclude_conditions)
-            
-            return query if query["$and"] else {}
-            
-        except Exception as e:
-            logger.error(f"Error building query: {e}")
-            return {}
+    return query

@@ -4,7 +4,7 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime, timedelta
 from typing import Optional, List
-from services.database.collections import save_collection
+from services.database.collections_manager import save_collection
 
 def SaveCollection(
     df: pd.DataFrame,
