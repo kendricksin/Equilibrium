@@ -1,30 +1,35 @@
 src/
-├── app.py                  # Main application entry point with department analysis
-├── components/            
-│   ├── filters/           # Filter-related components
-│   │   ├── KeywordFilter.py    # Keyword-based search with include/exclude functionality
-│   │   └── TableFilter.py      # Generic table filter utility for project data
-│   ├── layout/
-│   │   └── MetricsSummary.py   # Enhanced metrics summary with configurable styles
-│   └── tables/
-│       ├── CompanyTable.py     # Company information display with selection capability
-│       └── ProjectsTable.py    # Project information display with search/sort
+├── analytics/
+│   ├── company/
+│   │   ├── comparison.py        # Company comparison logic
+│   │   └── metrics.py          # Company metrics calculations
+│   ├── department/
+│   │   ├── aggregation.py      # Department aggregation logic
+│   │   └── distribution.py     # Department distribution analysis
+│   └── projects/
+│       ├── filters.py          # Project filtering logic
+│       └── metrics.py          # Project metrics calculations
 │
-├── pages/
-│   ├── ProjectSearch.py        # Project search page with keyword filtering
-│   └── CompanySearch.py        # Company search and comparison functionality
+├── components/
+│   ├── charts/
+│   │   ├── TreemapChart.py     # Reusable treemap component
+│   │   └── ComparisonChart.py  # Company comparison charts
+│   ├── filters/
+│   │   ├── DateRangeFilter.py  # Date range selector
+│   │   └── SearchFilter.py     # Search input with options
+│   ├── tables/
+│   │   ├── DataTable.py        # Base table component
+│   │   └── SortableTable.py    # Table with sorting capabilities
+│   └── common/
+│       ├── MetricCard.py       # Reusable metric display card
+│       └── LoadingState.py     # Loading indicators
 │
 ├── services/
-│   ├── analytics/
-│   │   ├── company_comparison.py  # Service for analyzing and comparing companies
-│   │   └── treemap_service.py     # Service for creating treemap visualizations
-│   ├── cache/
-│   │   ├── cache_manager.py       # File-based caching management
-│   │   └── department_cache.py    # Department-specific caching service
-│   └── database/
-│       └── mongodb.py             # MongoDB service with connection management
+│   ├── cache/                  # Your existing cache services
+│   └── database/              # Your existing database services
 │
-└── state/
-    ├── data_state.py         # Application data state and caching management
-    ├── filters.py            # Filter state management and operations
-    └── session.py            # Streamlit session state management
+├── pages/                     # Streamlit pages
+│
+└── utils/
+    ├── formatters.py          # Data formatting utilities
+    └── validators.py          # Input validation utilities

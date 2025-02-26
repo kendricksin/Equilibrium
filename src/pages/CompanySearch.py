@@ -5,6 +5,10 @@ import logging
 from services.database.mongodb import MongoDBService
 from typing import List, Dict, Any, Optional
 import plotly.graph_objects as go
+from analytics.company.comparison import CompanyAnalytics
+from components.charts.ComparisonChart import ComparisonChart
+from components.tables.DataTable import DataTable
+from utils.formatters import format_currency
 
 logger = logging.getLogger(__name__)
 
