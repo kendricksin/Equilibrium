@@ -1,6 +1,8 @@
+# src/components/tables/DataTable.py
+
 import streamlit as st
 import pandas as pd
-from typing import List, Optional, Callable
+from typing import List, Optional, Callable, Dict, Any
 
 class DataTable:
     """Base table component with common functionality"""

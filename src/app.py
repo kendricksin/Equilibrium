@@ -1,13 +1,16 @@
 # src/app.py
 
 import streamlit as st
-import plotly.graph_objects as go
 import pandas as pd
-from services.database.mongodb import MongoDBService
-from services.analytics.treemap_serivce import TreemapService
-from services.cache.department_cache import get_departments, get_department_stats
-from state.session import SessionState
+from datetime import datetime
 import logging
+
+from components.charts.TreemapChart import TreemapChart
+from components.common.MetricCard import MetricCard
+from components.common.LoadingState import LoadingState
+from services.database.mongodb import MongoDBService
+from services.database.analytics import AnalyticsService
+from services.database.caching import CachingService
 
 st.set_page_config(layout="wide")
 
@@ -16,10 +19,6 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
-
-def handle_filter_change(new_filters):
-    """Handle filter changes and redirect to home"""
-    st.session_state.current_page = 'home'
 
 def process_department_data(collection):
     """Process department distribution data from MongoDB collection"""
@@ -46,15 +45,16 @@ def process_department_data(collection):
 def main():
     """Department and sub-department analysis page using aggregated data"""
     try:
-        mongo_service = MongoDBService()
-        
-        # Initialize session state
-        SessionState.initialize_state()
+        # Initialize services
+        mongo = MongoDBService()
+        analytics = AnalyticsService()
+        cache = CachingService()
         
         try:
             # Get metadata
-            collection = mongo_service.get_collection("department_distribution")
-            data = process_department_data(collection)
+            with LoadingState("Loading department data..."):
+                collection = mongo.get_collection("department_distribution")
+                data = process_department_data(collection)
             
             if not data:
                 st.warning("No department data available for analysis")
@@ -65,135 +65,164 @@ def main():
             # Display metrics
             col1, col2, col3 = st.columns(3)
             with col1:
-                st.metric("Total Projects", f"{metadata['total_projects']:,}")
+                MetricCard(
+                    "Total Projects",
+                    metadata['total_projects'],
+                    formatter=lambda x: f"{x:,}"
+                ).render()
             with col2:
-                st.metric("Total Value", f"฿{metadata['total_value']/1e6:,.2f}M")
+                MetricCard(
+                    "Total Value",
+                    metadata['total_value'],
+                    formatter=lambda x: f"฿{x/1e6:,.2f}M"
+                ).render()
             with col3:
                 avg_value = metadata['total_value'] / metadata['total_projects']
-                st.metric("Average Project Value", f"฿{avg_value/1e6:,.2f}M")
+                MetricCard(
+                    "Average Project Value",
+                    avg_value,
+                    formatter=lambda x: f"฿{x/1e6:,.2f}M"
+                ).render()
 
             # Department Distribution Section
             st.header("Department Distribution")
             
-            view_type = st.radio(
-                "View by:",
-                ["Project Count", "Total Value"],
-                horizontal=True
-            )
+            # View options
+            col1, col2 = st.columns([3, 1])
+            with col1:
+                view_type = st.radio(
+                    "View by:",
+                    ["Project Count", "Total Value"],
+                    horizontal=True
+                )
+            with col2:
+                dept_limit = st.selectbox(
+                    "Number of departments:",
+                    options=[10, 20, 30, 50, 100],
+                    index=1  # Default to 20
+                )
             
-            # Get pre-aggregated department data with limit
-            dept_data = mongo_service.get_department_summary(
-                view_by="count" if view_type == "Project Count" else "total_value",
-                limit=20 #Show top 20 departments
-            )
+            # Get pre-aggregated department data
+            with LoadingState("Loading department distribution..."):
+                dept_data = mongo.get_department_summary(
+                    view_by="count" if view_type == "Project Count" else "total_value",
+                    limit=dept_limit
+                )
+                dept_df = pd.DataFrame(dept_data)
             
-            # Convert to DataFrame
-            dept_df = pd.DataFrame(dept_data)
-
-            
-            # Create treemap based on view type
-            if view_type == "Project Count":
-                value_col = 'count'
-                hover_data = {
-                    'department': '%{label}',
-                    'count': 'Projects: %{value:,}',
-                    'total_value_millions': 'Value: ฿%{customdata.total_value_millions:.1f}M',
-                    'unique_companies': 'Companies: %{customdata.unique_companies:,}'
-                }
-                custom_data = dept_df[['total_value_millions', 'unique_companies']].to_dict('records')
-            else:
-                value_col = 'total_value_millions'
-                hover_data = {
-                    'department': '%{label}',
-                    'total_value_millions': 'Value: ฿%{value:.1f}M',
-                    'count': 'Projects: %{customdata.count:,}',
-                    'unique_companies': 'Companies: %{customdata.unique_companies:,}'
-                }
-                custom_data = dept_df[['count', 'unique_companies']].to_dict('records')
-
-            # Create department treemap
-            fig = TreemapService.create_treemap(
-                data=dept_df,
-                id_col='department',
-                value_col=value_col,
-                hover_data=hover_data,
-                custom_data=custom_data,
-                title="Department Distribution",
-                height=600,
-                color_scheme='Reds',
-                show_percentages=True,
-                layout_options={
-                    "margin": dict(t=50, l=10, r=10, b=10),
-                    "uniformtext": dict(minsize=11, mode='hide')
-                },
-                text_template="<b>{}</b><br>{:.1f}%"  # Format for label and percentage
-            )
-            
-            st.plotly_chart(fig, use_container_width=True)
-            
-            # Department Details Section
-            st.header("Department Details")
-            
-            # Get departments from cache
-            dept_options = get_departments()
-            
-            # Format department options to show stats
-            dept_display_options = []
-            for dept in dept_options:
-                stats = get_department_stats(dept)
-                if stats:
-                    count = stats.get('count', 0)
-                    value = stats.get('total_value_millions', 0)
-                    dept_display_options.append(f"{dept} ({count:,} projects, ฿{value:.1f}M)")
-                else:
-                    dept_display_options.append(dept)
-            
-            # Create mapping from display string back to department name
-            dept_mapping = dict(zip(dept_display_options, dept_options))
-            
-            selected_display = st.selectbox(
-                "Select Department for Detailed Analysis",
-                options=dept_display_options
-            )
-            
-            if selected_display:
-                selected_dept = dept_mapping[selected_display]
-                dept_stats = get_department_stats(selected_dept)
+            if len(dept_df) > 0:
+                # Add this before creating the department treemap
+                st.write(f"Department data shape: {dept_df.shape}")
+                st.write(f"Department columns: {dept_df.columns.tolist()}")
+                if len(dept_df) > 0:
+                    st.write("Sample department data:")
+                    st.write(dept_df.head(3))
                 
-                if dept_stats:
+                # Create department treemap
+                dept_treemap = TreemapChart(
+                    data=dept_df,
+                    value_column='count' if view_type == "Project Count" else 'total_value_millions',
+                    path_columns=['department'],
+                    title=f"Top {dept_limit} Departments by {view_type}",
+                    height=600,
+                    color_scheme='Reds',
+                    max_items=dept_limit
+                )
+                dept_treemap.render()
+                
+                # Department Details Section
+                st.header("Department Details")
+                
+                # Department selection with stats
+                departments = dept_df['department'].tolist()
+                dept_options = []
+                
+                for dept in departments:
+                    dept_stats = dept_df[dept_df['department'] == dept].iloc[0]
+                    dept_options.append(
+                        f"{dept} ({int(dept_stats['count']):,} projects, "
+                        f"฿{dept_stats['total_value_millions']:.1f}M)"
+                    )
+                
+                # Create mapping from display string back to department name
+                dept_mapping = dict(zip(dept_options, departments))
+                
+                selected_display = st.selectbox(
+                    "Select Department for Detailed Analysis",
+                    options=dept_options
+                )
+                
+                if selected_display:
+                    selected_dept = dept_mapping[selected_display]
+                    dept_stats = dept_df[dept_df['department'] == selected_dept].iloc[0]
+                    
                     # Display department metrics
                     col1, col2, col3, col4 = st.columns(4)
                     with col1:
-                        st.metric("Total Projects", f"{dept_stats['count']:,}")
+                        MetricCard(
+                            "Total Projects",
+                            dept_stats['count'],
+                            formatter=lambda x: f"{int(x):,}"
+                        ).render()
                     with col2:
-                        st.metric("Total Value", f"฿{dept_stats['total_value_millions']:.2f}M")
+                        MetricCard(
+                            "Total Value",
+                            dept_stats['total_value_millions'],
+                            formatter=lambda x: f"฿{x:.2f}M"
+                        ).render()
                     with col3:
-                        st.metric("Market Share", f"{dept_stats['value_percentage']:.1f}%")
+                        MetricCard(
+                            "Market Share",
+                            dept_stats['value_percentage'],
+                            formatter=lambda x: f"{x:.1f}%"
+                        ).render()
                     with col4:
-                        st.metric("Unique Companies", f"{dept_stats['unique_companies']:,}")
+                        MetricCard(
+                            "Unique Companies",
+                            dept_stats['unique_companies'],
+                            formatter=lambda x: f"{int(x):,}"
+                        ).render()
                     
-                    # Get pre-aggregated subdepartment data with limit
-                    subdept_data = mongo_service.get_subdepartment_data(selected_dept, limit=30)
-                    subdept_df = pd.DataFrame(subdept_data)
-
-                    # Create subdepartment treemap
-                    subdept_fig = TreemapService.create_treemap(
-                        data=subdept_df,
-                        id_col='subdepartment',
-                        value_col=value_col,
-                        hover_data=hover_data,
-                        custom_data=custom_data,
-                        title=f"Sub-departments of {selected_dept}",
-                        height=400,
-                        color_scheme='Reds',
-                        show_percentages=True,
-                        text_template="<b>{}</b><br>{:.1f}%"
-                    )
+                    # Sub-department options
+                    col1, col2 = st.columns([3, 1])
+                    with col2:
+                        subdept_limit = st.selectbox(
+                            "Number of sub-departments:",
+                            options=[10, 20, 30, 50, 100],
+                            index=1  # Default to 20
+                        )
                     
-                    st.plotly_chart(subdept_fig, use_container_width=True)
+                    # Get and display subdepartment data
+                    with LoadingState("Loading subdepartment data..."):
+                        subdept_data = mongo.get_subdepartment_data(
+                            selected_dept, 
+                            limit=subdept_limit
+                        )
+                        subdept_df = pd.DataFrame(subdept_data)
+                        
+                        if len(subdept_df) > 0:
+                            # Add this before creating the subdepartment treemap
+                            st.write(f"Subdepartment data shape: {subdept_df.shape}")
+                            st.write(f"Subdepartment columns: {subdept_df.columns.tolist()}")
+                            if len(subdept_df) > 0:
+                                st.write("Sample subdepartment data:")
+                                st.write(subdept_df.head(3))
+                            
+                            subdept_treemap = TreemapChart(
+                                data=subdept_df,
+                                value_column='count' if view_type == "Project Count" else 'total_value_millions',
+                                path_columns=['subdepartment'],
+                                title=f"Top {subdept_limit} Sub-departments of {selected_dept}",
+                                height=400,
+                                color_scheme='Reds',
+                                max_items=subdept_limit
+                            )
+                            subdept_treemap.render()
+                        else:
+                            st.info(f"No sub-department data available for {selected_dept}")
 
         finally:
-            mongo_service.disconnect()
+            mongo.disconnect()
 
     except Exception as e:
         logger.error(f"Error in application: {e}")

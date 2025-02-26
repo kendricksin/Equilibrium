@@ -269,6 +269,37 @@ class MongoDBService:
             logger.error(f"Error getting subdepartment data: {e}")
             raise
 
+    @retry_on_connection_error()
+    def get_dataframe(
+        self,
+        collection_name: str,
+        query: Dict[str, Any] = None,
+        projection: Optional[Dict[str, Any]] = None
+    ) -> pd.DataFrame:
+        """Get data as DataFrame with proper error handling"""
+        try:
+            collection = self.get_collection(collection_name)
+            cursor = collection.find(query or {}, projection)
+            return pd.DataFrame(list(cursor))
+        except Exception as e:
+            logger.error(f"Error getting DataFrame: {e}")
+            return pd.DataFrame()
+
+    @retry_on_connection_error()
+    def get_distinct_values(
+        self,
+        collection_name: str,
+        field: str,
+        query: Dict[str, Any] = None
+    ) -> List[str]:
+        """Get distinct values for a field"""
+        try:
+            collection = self.get_collection(collection_name)
+            return sorted(collection.distinct(field, query or {}))
+        except Exception as e:
+            logger.error(f"Error getting distinct values: {e}")
+            return []
+
     def __enter__(self):
         self.ensure_connection()
         return self

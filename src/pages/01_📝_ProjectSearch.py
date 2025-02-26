@@ -3,180 +3,97 @@
 import streamlit as st
 import pandas as pd
 from datetime import datetime
-from components.layout.MetricsSummary import MetricsSummary
-from components.filters.KeywordFilter import KeywordFilter, build_keyword_query
-from components.filters.TableFilter import filter_projects
+import logging
+
+from components.filters.TableFilter import TableFilter
+from components.filters.KeywordFilter import KeywordFilter
 from components.tables.ProjectsTable import ProjectsTable
-from state.session import SessionState
+from components.common.LoadingState import LoadingState
+from components.common.MetricCard import MetricCard
+
+from analytics.projects.filters import ProjectFilters
+from analytics.projects.metrics import ProjectMetrics
 from services.database.mongodb import MongoDBService
 
-st.set_page_config(layout="wide")
+logger = logging.getLogger(__name__)
 
 def ProjectSearch():
-    """Project search page with keyword filtering and secondary filtering"""
-    # Initialize session state
-    SessionState.initialize_state()
+    st.title("📝 Project Search")
     
-    # Initialize MongoDB service
-    mongo_service = MongoDBService()
+    # Initialize services
+    mongo = MongoDBService()
+    project_metrics = ProjectMetrics()
     
-    # Get current filters from session state
-    filters = SessionState.get_filters()
+    # Initialize filters
+    table_filter = TableFilter(key_prefix="project_search")
+    keyword_filter = KeywordFilter(key_prefix="project_search")
     
-    # Keyword search section
-    include_keywords, exclude_keywords = KeywordFilter(
-        current_include=st.session_state.get('include_keywords', []),
-        current_exclude=st.session_state.get('exclude_keywords', []),
-        key_prefix="search_"
-    )
+    # Get filter options
+    with LoadingState("Loading filter options..."):
+        departments = mongo.get_distinct_values("projects", "dept_name")
+        companies = mongo.get_distinct_values("projects", "winner")
     
-    # Store keywords in session state
-    st.session_state.include_keywords = include_keywords
-    st.session_state.exclude_keywords = exclude_keywords
-    
-    # Search button
-    col1, col2 = st.columns([1, 5])
-    with col1:
-        search_clicked = st.button("🔎 Search", type="primary", use_container_width=True)
-    
-    # Clear button
-    with col2:
-        if st.button("❌ Clear Search", use_container_width=True):
-            st.session_state.include_keywords = []
-            st.session_state.exclude_keywords = []
-            st.session_state.search_results = None
-            st.session_state.filtered_results = None
-            st.rerun()
-    
-    # Process search
-    if search_clicked and (include_keywords or exclude_keywords):
-        with st.spinner("Searching projects..."):
-            try:
-                # Build keyword query
-                keyword_query = build_keyword_query(include_keywords, exclude_keywords)
-                
-                # Combine with existing filters if any
-                if filters and st.session_state.filters_applied:
-                    from state.filters import FilterManager
-                    filter_query = FilterManager.build_mongo_query(filters)
-                    if filter_query:
-                        if "$and" in keyword_query:
-                            keyword_query["$and"].extend(
-                                filter_query.get("$and", [])
-                            )
-                        else:
-                            keyword_query["$and"] = filter_query.get("$and", [])
-                
-                # Fetch results with limit
-                df = mongo_service.get_projects(
-                    query=keyword_query,
-                    max_documents=20000
-                )
-                
-                if df is not None and not df.empty:
-                    st.session_state.search_results = df
-                    st.session_state.filtered_results = None  # Reset filtered results
-                    st.rerun()
-                else:
-                    st.warning("No projects found matching your search criteria.")
-                    
-            except Exception as e:
-                st.error(f"Error performing search: {str(e)}")
-                
-    # Display and filter results
-    if st.session_state.get('search_results') is not None:
-        df = st.session_state.search_results
-        
-        # Apply secondary filters if results exist
-        filtered_df = filter_projects(
-            df,
-            key_prefix="secondary_",
-            config={
-                'value_column': 'sum_price_agree',
-                'value_unit': 1e6,
-                'value_label': 'Million Baht',
-                'expander_default': True
-            }
+    # Render filters in sidebar for better space usage
+    with st.sidebar:
+        filters = table_filter.render(departments=departments, companies=companies)
+        keyword_params = keyword_filter.render(
+            search_fields=["project_name", "winner", "dept_name", "purchase_method_name"]
         )
-        st.session_state.filtered_results = filtered_df
+    
+    # Build query
+    query = {}
+    if filters:
+        query.update(ProjectFilters.build_mongo_query(filters))
+    if keyword_params:
+        keyword_query = keyword_filter.build_query(keyword_params)
+        if keyword_query:
+            query.update(keyword_query)
+    
+    # Fetch data
+    with LoadingState("Fetching projects..."):
+        projects_df = mongo.get_dataframe("projects", query)
+    
+    if len(projects_df) > 0:
+        # Calculate metrics
+        metrics = project_metrics.calculate_summary_metrics(projects_df)
         
-        # Use filtered results if available, otherwise use original results
-        display_df = filtered_df if filtered_df is not None else df
-        
-        # Display metrics for current view
-        MetricsSummary(display_df)
-        
-        # Display quick stats
-        st.markdown("### 📊 Quick Statistics")
-        
-        # Calculate company statistics
-        company_stats = display_df.groupby('winner').agg({
-            'sum_price_agree': ['sum', 'mean'],
-            'project_name': 'count'
-        }).reset_index()
-        
-        # Flatten column names and rename
-        company_stats.columns = ['winner', 'total_value', 'avg_value', 'project_count']
-        
-        # Display stats in columns
-        col1, col2, col3 = st.columns(3)
-        
+        # Display metrics
+        col1, col2, col3, col4 = st.columns(4)
         with col1:
-            st.markdown("**Top Companies by Value**")
-            top_by_value = company_stats.nlargest(5, 'total_value')
-            for idx, row in top_by_value.iterrows():
-                st.markdown(f"{idx+1}. **{row['winner']}**  \n"
-                          f"฿{row['total_value']/1e6:.1f}M ({row['project_count']} projects)")
-        
+            MetricCard(
+                "Total Projects",
+                metrics['total_projects'],
+                formatter=lambda x: f"{x:,}"
+            ).render()
         with col2:
-            st.markdown("**Top Companies by Projects**")
-            top_by_count = company_stats.nlargest(5, 'project_count')
-            for idx, row in top_by_count.iterrows():
-                st.markdown(f"{idx+1}. **{row['winner']}**  \n"
-                          f"{row['project_count']} projects (avg ฿{row['avg_value']/1e6:.1f}M)")
-        
+            MetricCard(
+                "Total Value",
+                metrics['total_value'],
+                formatter=lambda x: f"฿{x:,.0f}M",
+                help_text="Total project value in millions"
+            ).render()
         with col3:
-            st.markdown("**Top Departments by Projects**")
-            top_departments = display_df.groupby('dept_name')['project_name'].count()
-            top_departments = top_departments.nlargest(5)
-            for idx, (dept, count) in enumerate(top_departments.items()):
-                st.markdown(f"{idx+1}. **{dept}**  \n"
-                          f"{count} projects")
+            MetricCard(
+                "Departments",
+                metrics['unique_departments'],
+                suffix=" depts"
+            ).render()
+        with col4:
+            MetricCard(
+                "Companies",
+                metrics['unique_companies'],
+                suffix=" companies"
+            ).render()
         
-        st.markdown("---")
-        
-        # Display results table with built-in search and sorting
-        st.markdown(f"### Search Results ({len(display_df):,} projects)")
-        ProjectsTable(
-            df=display_df,
-            filters=filters,
-            show_search=True,
-            key_prefix="search_results_"
+        # Display projects table
+        st.subheader("Projects")
+        projects_table = ProjectsTable(projects_df)
+        projects_table.render(
+            allow_column_config=True,
+            show_stats=False  # Already showing metrics above
         )
-        
-        # Add export functionality
-        if st.button("📥 Export to CSV", key="export_results"):
-            # Prepare export data
-            export_df = display_df.copy()
-            export_df['transaction_date'] = export_df['transaction_date'].dt.strftime('%Y-%m-%d')
-            
-            # Generate filename
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = f"project_search_results_{timestamp}.csv"
-            
-            # Convert to CSV
-            csv = export_df.to_csv(index=False)
-            
-            # Create download button
-            st.download_button(
-                label="📥 Download CSV",
-                data=csv,
-                file_name=filename,
-                mime="text/csv",
-                key="download_results"
-            )
     else:
-        st.info("Enter keywords above and click Search to find projects.")
+        st.info("No projects found matching the criteria")
 
 if __name__ == "__main__":
     ProjectSearch()
